@@ -1,71 +1,22 @@
 from __future__ import annotations
 
 import time
+from typing import Any
 
-from typing import Callable, Any
 from PIL import Image
 from langchain.agents import create_agent
 from langchain.agents.middleware import wrap_model_call
-from langchain_core.messages import AIMessage, SystemMessage, ToolMessage
+from langchain_core.messages import AIMessage, ToolMessage
 from langgraph.errors import GraphRecursionError
 
 from agent.messages import build_user_message
-from agent.prompts import SYSTEM_PROMPT, TEXT_TOOL_SECTION
-from prompts import ANSWER_FORMAT
+from agent.prompts import PREVIEW_PROMPT, SYSTEM_PROMPT, UNIFIED_PROMPT
 from agent.run import AgentRun
 from agent.tools import build_tools
+from prompts import (RAG_PROMPT, RAG_PROMPT_DIRECT, RAG_PROMPT_LEGACY,
+                     extract_answer)
 from retrieval.bm25 import BM25Ranker
-
-def force_first_tool() -> Any:
-    """Forces the LLM to call a tool on its very first conversational turn."""
-    @wrap_model_call
-    def force_first_middleware(request: Any, handler: Callable) -> Any:
-        if not any(isinstance(m, ToolMessage) for m in reversed(request.messages)):
-            request = request.override(tool_choice="required")
-        return handler(request)
-
-    return force_first_middleware
-
-
-def remind_original_question(original_question: str) -> Any:
-    """Re-inject the question AND the answer format before the final answer.
-
-    The format block sits at the end of the system prompt, tens of thousands of
-    retrieved tokens back by the time the agent answers, and the agent ignores
-    it: every C run so far averaged 7-18 words per answer against 2.5 for the
-    same format in baseline B. That is not cosmetic — BEM pays for length, so B
-    on the short format (0.359) and C at fifteen words (0.384) were never
-    measured in the same regime. Repeating the format after each tool result is
-    what puts them back in one.
-    """
-    @wrap_model_call
-    def remind_question_middleware(request, handler):
-        if request.messages and isinstance(request.messages[-1], ToolMessage):
-            reminder = SystemMessage(content=(
-                f"Reminder: keep your final answer strictly focused on the "
-                f"original question: '{original_question}'\n\n{ANSWER_FORMAT}"
-            ))
-            request = request.override(messages=request.messages + [reminder])
-        return handler(request)
-
-    return remind_question_middleware
-
-def require_tool_before_answer(tool_name: str, max_calls: int = 3) -> Any:
-    """Do not let the agent answer until it has called ``tool_name`` once.
-
-    The same lever as `require_distinct_names`, for the same reason: the agent
-    is told when a tool would help and does not act on it — a `verify` tool
-    reported NOT CONFIRMED on 64.5% of examples and the agent changed course on
-    0.2% of those. Forcing the call separates "the tool does not help" from "the
-    agent does not use it", which are very different conclusions.
-    """
-    @wrap_model_call
-    def middleware(request, handler):
-        if should_force(request.messages, tool_name):
-            return handler(request.override(tool_choice=tool_name))
-        return handler(request)
-
-    return middleware
+from retrieval.fusion import rank_paragraphs
 
 
 def open_text_gate(state: dict, tool_name: str, threshold: float) -> Any:
@@ -96,7 +47,7 @@ def should_force(messages, tool_name: str) -> bool:
     examples, which a two-line check would have caught.
     """
     if not any(isinstance(m, ToolMessage) for m in messages):
-        return False        # first turn: force_first_tool's job, not ours
+        return False        # nothing read yet: too early to demand a second round
     called = sum(1 for m in messages if isinstance(m, AIMessage)
                  for tc in (m.tool_calls or []) if tc["name"] == tool_name)
     return called == 0
@@ -110,10 +61,13 @@ class AgenticRAG:
     """
 
     def __init__(self, llm, retriever, kb, reranker, top_n=5, top_k=20,
-                 bm25_top_m=50, max_iterations=8, force_first=True,
+                 bm25_top_m=50, max_iterations=8,
                  retrieval_mode: str = "bm25+reranker", rrf_k: int = 60,
-                 with_text: bool = False, text_limit: int = 5,
-                 force_text: bool = False, text_gate: float | None = None):
+                 text_limit: int = 5, max_names: int = 4, lookup_limit: int = 3,
+                 text_gate: float | None = None,
+                 final_pass: bool = False, legacy_prompt: bool = False,
+                 unified: bool = False, direct_prompt: bool = False,
+                 with_read: bool = True, preview: int = 0):
         self.llm = llm
         self.retriever = retriever
         self.kb = kb
@@ -123,24 +77,39 @@ class AgenticRAG:
         self.top_k = top_k
         self.bm25_top_m = bm25_top_m
         self.max_iterations = max_iterations
-        self.force_first = force_first
         self.retrieval_mode = retrieval_mode
         self.rrf_k = rrf_k
-        self.with_text = with_text
         self.text_limit = text_limit
-        self.force_text = force_text
+        self.max_names = max_names
+        self.lookup_limit = lookup_limit
         self.text_gate = text_gate
+        self.final_pass = final_pass
+        self.legacy_prompt = legacy_prompt
+        self.unified = unified
+        self.direct_prompt = direct_prompt
+        self.with_read = with_read
+        self.preview = preview
 
     def _middleware(self, question: str, state: dict) -> list[Any]:
-        middlewares = []
-        if self.force_first:
-            middlewares.append(force_first_tool())
-        if self.with_text and self.text_gate is not None:
-            middlewares.append(open_text_gate(state, "search_by_text", self.text_gate))
-        elif self.force_text and self.with_text:
-            middlewares.append(require_tool_before_answer("search_by_text"))
-        middlewares.append(remind_original_question(question))
-        return middlewares
+        """The one middleware left, and the only one that ever earned its place.
+
+        Three others were removed after measuring them: forcing the first tool
+        call (0.318 against 0.321 with it off, and the same first-tool
+        distribution), repeating the question after every tool result, and
+        requiring a specific tool before answering. All three existed to patch
+        habits of the agent — not calling tools, losing the question, ignoring
+        the answer format — and became pointless once the architecture stopped
+        producing those habits: one tool instead of five, and the answer
+        generated by the pipeline.
+
+        This one is different in kind. It does not correct the model, it decides
+        when a second retrieval round is worth it, from the cross-encoder's own
+        score rather than from the model's sense of whether it knows enough —
+        which failed in five separate experiments.
+        """
+        if self.text_gate is None:
+            return []
+        return [open_text_gate(state, "search", self.text_gate)]
 
     def run(self, image_path: str, question: str) -> AgentRun:
         t0 = time.time()
@@ -159,10 +128,14 @@ class AgenticRAG:
                               bm25_top_m=self.bm25_top_m,
                               retrieval_mode=self.retrieval_mode,
                               rrf_k=self.rrf_k,
-                              with_text=self.with_text,
                               text_limit=self.text_limit,
-                              state=state),
-            system_prompt=SYSTEM_PROMPT + (TEXT_TOOL_SECTION if self.with_text else ""),
+                              max_names=self.max_names,
+                              lookup_limit=self.lookup_limit,
+                              state=state, unified=self.unified,
+                              with_read=self.with_read,
+                              preview=self.preview, question=question),
+            system_prompt=(PREVIEW_PROMPT if self.preview else
+                           UNIFIED_PROMPT if self.unified else SYSTEM_PROMPT),
             middleware=self._middleware(question, state),
         )
 
@@ -178,5 +151,36 @@ class AgenticRAG:
         except Exception as e:
             run = AgentRun(error=str(e))
 
+        if self.final_pass and not run.error:
+            answer = self._answer_from_pool(image_path, question, state)
+            if answer is not None:
+                run.prediction = answer
+
         run.elapsed_seconds = round(time.time() - t0, 2)
         return run
+
+    def _answer_from_pool(self, image_path: str, question: str, state: dict):
+        """Answer from the pool the agent assembled, the way baseline B does.
+
+        The agent retrieves as well as the pipeline and answers worse: with the
+        same channels, gate and reranker it holds the right answer in 30.3% of
+        its replies against 33.3%, while reading the same paragraphs. This keeps
+        its retrieval and hands the reading back to a single call over one block
+        of passages, which is the only part of B it was losing to.
+        """
+        candidates = state.get("candidates") or {}
+        pooled = [p for c in candidates.values()
+                  for p in self.kb.get_paragraphs_by_url(
+                      wiki_url=c.wiki_url)]
+        if not pooled:
+            return None
+        best = rank_paragraphs(question, pooled, strategy="bge", top_k=self.top_n,
+                               reranker=self.reranker, bm25_ranker=self.bm25,
+                               bm25_top_m=self.bm25_top_m, rrf_k=self.rrf_k)
+        if not best:
+            return None
+        template = (RAG_PROMPT_DIRECT if self.direct_prompt else
+                    RAG_PROMPT_LEGACY if self.legacy_prompt else RAG_PROMPT)
+        prompt = template.format(context="\n\n".join(best), question=question)
+        reply = self.llm.invoke([build_user_message(image_path, prompt)]).content
+        return extract_answer(reply if isinstance(reply, str) else str(reply))

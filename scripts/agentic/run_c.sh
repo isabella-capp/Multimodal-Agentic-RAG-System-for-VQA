@@ -34,10 +34,16 @@ TOP_K="${TOP_K:-20}"
 TOP_N="${TOP_N:-20}"
 BM25_TOP_M="${BM25_TOP_M:-50}"
 CONCURRENCY=4
-FORCE_FIRST="${FORCE_FIRST:-1}"
-WITH_TEXT="${WITH_TEXT:-0}"
-FORCE_TEXT="${FORCE_TEXT:-0}"
 TEXT_GATE="${TEXT_GATE:-}"
+FINAL_PASS="${FINAL_PASS:-0}"
+LEGACY="${LEGACY:-0}"
+UNIFIED="${UNIFIED:-0}"
+DIRECT="${DIRECT:-0}"
+WITH_READ="${WITH_READ:-1}"
+PREVIEW="${PREVIEW:-0}"
+TEXT_LIMIT="${TEXT_LIMIT:-5}"
+MAX_NAMES="${MAX_NAMES:-4}"
+LOOKUP_LIMIT="${LOOKUP_LIMIT:-3}"
 MAX_IT="${MAX_IT:-12}"
 # Paragraph retrieval pipeline:
 #   bm25+reranker  — BM25 pre-filter (top-M) -> cross-encoder [default]
@@ -51,10 +57,13 @@ CODE_DIR="${CODE_DIR:-$PROJECT_DIR}"
 OUT_DIR="${RESUME_DIR:-outputs/agentic/$TAG/${RUN_ID:-manual}}"
 
 FORCE=()
-[ "$FORCE_FIRST" = "0" ] && FORCE=(--no-force-first-tool)
-[ "$WITH_TEXT" = "1" ] && FORCE+=(--with-text)
-[ "$FORCE_TEXT" = "1" ] && FORCE+=(--with-text --force-text)
-[ -n "$TEXT_GATE" ] && FORCE+=(--with-text --text-gate "$TEXT_GATE")
+[ -n "$TEXT_GATE" ] && FORCE+=(--text-gate "$TEXT_GATE")
+[ "$FINAL_PASS" = "1" ] && FORCE+=(--final-pass)
+[ "$LEGACY" = "1" ] && FORCE+=(--legacy-prompt)
+[ "$UNIFIED" = "1" ] && FORCE+=(--unified)
+[ "$DIRECT" = "1" ] && FORCE+=(--direct-prompt)
+[ "$WITH_READ" = "0" ] && FORCE+=(--no-read-article)
+[ "$PREVIEW" != "0" ] && FORCE+=(--preview "$PREVIEW")
 
 if [ "${SMOKE:-0}" = "1" ]; then
     LIMIT=(--limit 5); DEBUG="${DEBUG:-5}"; OUT_DIR="$OUT_DIR/smoke"
@@ -77,7 +86,7 @@ cd "$PROJECT_DIR"
 mkdir -p "${LOG_DIR:-logs}" "$OUT_DIR"
 source "$CODE_DIR/scripts/lib/vllm.sh"
 
-echo "reranker: $CROSS_ENCODER_MODEL   retrieval-mode: $RETRIEVAL_MODE   force-first: $FORCE_FIRST   bm25-m: $BM25_TOP_M   text: $WITH_TEXT/$FORCE_TEXT"
+echo "reranker: $CROSS_ENCODER_MODEL   retrieval-mode: $RETRIEVAL_MODE   bm25-m: $BM25_TOP_M   gate: ${TEXT_GATE:-off}"
 ensure_vllm_venv
 serve_model "$MODEL" "$GPU_UTIL" "$MAX_LEN"
 
@@ -88,7 +97,8 @@ uv run python "$CODE_DIR"/src/agent/run_inference.py \
     --model-name "$MODEL" --base-url "$BASE_URL" \
     --output "$OUT_DIR/predictions_C${MODE_SUFFIX}.jsonl" \
     --top-k "$TOP_K" --rerank-top-n "$TOP_N" --bm25-top-m "$BM25_TOP_M" \
-    --max-iterations "$MAX_IT" \
+    --max-iterations "$MAX_IT" --text-limit "$TEXT_LIMIT" \
+    --max-names "$MAX_NAMES" --lookup-limit "$LOOKUP_LIMIT" \
     --retrieval-mode "$RETRIEVAL_MODE" \
     --concurrency "$CONCURRENCY" --debug-samples "$DEBUG" \
     "${FORCE[@]}" "${LIMIT[@]}"

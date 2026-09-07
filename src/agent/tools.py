@@ -21,8 +21,9 @@ class LookupArticleInput(BaseModel):
 class SearchParagraphsInput(BaseModel):
     query: str = Field(..., description="A short, highly focused keyword phrase (e.g. 'Arabidopsis lyrata outcrossing') to find specific information. Do not use full sentences or questions.")
 
-class SearchByTextInput(BaseModel):
-    query: str = Field(..., description="Distinctive words that would appear in the article you want — a species name, a place, a technical term. Rare words work, generic ones ('large', 'population', 'typically') do not.")
+class SearchInput(BaseModel):
+    query: str = Field(..., description="Keywords describing what you need to know: what the question asks about, plus any distinctive term. Rare words find things, generic ones ('large', 'population', 'typically') do not.")
+    names: list[str] = Field(default_factory=list, description="Titles of articles to open as well, exactly as they appeared in a previous tool result. Give the ones that could plausibly be the subject; leave empty if none look right.")
 
 class ReadArticleInput(BaseModel):
     title: str = Field(..., description="The EXACT title of the Wikipedia article, exactly as it appeared in previous tool results.")
@@ -44,14 +45,16 @@ def _format(paragraphs: list[tuple[str, str]]) -> str:
 
 
 def build_tools(retriever, kb, reranker, bm25, image,
-                top_n=5, top_k=20, bm25_top_m=50, lookup_limit=5,
+                top_n=5, top_k=20, bm25_top_m=50, lookup_limit=3,
                 retrieval_mode: str = "reranker", rrf_k: int = 60,
-                text_limit: int = 5, with_text: bool = False, state=None):
+                text_limit: int = 5, state=None,
+                unified: bool = False, max_names: int = 4, with_read: bool = True,
+                preview: int = 0, question: str = ""):
     """Retrieval tools for one query image, over a working set the agent grows.
 
-    Up to three ways into the KB — by image (EVA-CLIP/FAISS), by name, and with
-    ``with_text`` by what the articles say — and two ways to read: search across
-    all candidates, or read one article deeply.
+    Three ways into the KB — by image (EVA-CLIP/FAISS), by name, and by what
+    the articles say — and two ways to read: search across all candidates, or
+    read one article deeply.
 
     The text entry is the one the pipeline cannot use well. Given the question
     verbatim it lifts article coverage from 46.6% to 56.1%, but stacking its
@@ -118,6 +121,8 @@ def build_tools(retriever, kb, reranker, bm25, image,
             _register_image(cache["articles"])
         return cache["articles"]
 
+    state["candidates"] = candidates   # what the agent assembled, for a final pass
+
     def _pool() -> list[tuple[str, str]]:
         """Every paragraph of every article in the working set, tagged with title."""
         _image_candidates()
@@ -130,28 +135,6 @@ def build_tools(retriever, kb, reranker, bm25, image,
             ]
             cache["pool_key"] = key
         return cache["pool"]
-
-    @tool(args_schema=SearchByTextInput)
-    def search_by_text(query: str) -> str:
-        """Find articles by what is WRITTEN in them, not by the picture.
-
-        The only tool that does not depend on recognising the subject: it
-        searches the text of all 2M articles for your words. Use it when the
-        passages you have read are about the wrong thing, or when you cannot
-        name what you see but the question mentions something concrete — a
-        place, a date, a measurement, a technical term.
-
-        Choose rare words. This finds the article 6 times out of 10 when the
-        query holds something distinctive, and almost never when it is made of
-        common words. Whatever it finds joins your candidates.
-        """
-        found = kb.search_articles_by_text(query, limit=text_limit)
-        if not found:
-            return (f"Nothing found for '{query}'. Those words are probably too "
-                    f"common — try more specific ones.")
-        _register_text(found)
-        return ("Added to your candidates:\n"
-                + "\n".join(f"- {a['title']}" for a in found))
 
     @tool(args_schema=LookupArticleInput)
     def lookup_article(name: str) -> str:
@@ -185,8 +168,26 @@ def build_tools(retriever, kb, reranker, bm25, image,
         articles = _image_candidates()
         if not articles:
             return "No articles found for this image."
-        return "\n".join(f"{i:2d}. {a['title']}   (visual match {a['score']:.3f})"
-                          for i, a in enumerate(articles, 1))
+        listing = "\n".join(f"{i:2d}. {a['title']}   (visual match {a['score']:.3f})"
+                            for i, a in enumerate(articles, 1))
+        if not preview or not question:
+            return listing
+
+        # Show the passages, not just the titles: the agent has to write the
+        # keywords for the next search, and it writes better ones after reading
+        # text than after reading a list of names. All 20 candidates stay in the
+        # pool — only how much of it the agent sees is cut.
+        pool = _pool()
+        if not pool:
+            return listing
+        by_text = {text: title for title, text in pool}
+        best = rank_paragraphs(question, [t for _, t in pool], strategy="bge",
+                               top_k=preview, reranker=reranker,
+                               bm25_ranker=bm25, bm25_top_m=bm25_top_m, rrf_k=rrf_k)
+        state["top_score"] = getattr(reranker, "last_top_score", None)
+        return (f"Articles this image matches:\n{listing}\n\n"
+                f"Passages from them, most relevant first:\n"
+                + _format([(by_text.get(p, "?"), p) for p in best]))
 
     @tool(args_schema=ReadArticleInput)
     def read_article(title: str, query: str) -> str:
@@ -239,5 +240,26 @@ def build_tools(retriever, kb, reranker, bm25, image,
         return _format([(by_text.get(p, "?"), p) for p in best]) if best else \
             "No relevant paragraphs found."
 
-    tools = [lookup_article, search_by_image, search_paragraphs, read_article]
-    return tools + [search_by_text] if with_text else tools
+    @tool(args_schema=SearchInput)
+    def search(query: str, names: list[str] | None = None) -> str:
+        """Find and read passages about what you are looking for.
+
+        `query` is what you want to know, in keywords. `names` are articles to
+        open by title, taken from what an earlier tool listed.
+
+        Splitting them matters: a title is looked up as a title, keywords are
+        matched against the text of every article. One string cannot do both —
+        "Aeschynomene as a plant in the US" finds nothing as a title, and
+        "Aeschynomene" alone finds little as a query.
+        """
+        for name in (names or [])[:max_names]:
+            _register_lookup(kb.lookup_articles(name, limit=lookup_limit))
+        if not names:
+            _register_lookup(kb.lookup_articles(query, limit=lookup_limit))
+        _register_text(kb.search_articles_by_text(query, limit=text_limit))
+        return search_paragraphs.func(query)
+
+    if unified:
+        return [search_by_image, search] + ([read_article] if with_read else [])
+
+    return [lookup_article, search_by_image, search_paragraphs, read_article]
