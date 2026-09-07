@@ -80,9 +80,13 @@ def main():
     scoring_function = evaluation_utils.initialize_encyclopedic_vqa_evaluation_function()
 
     scores_by_type = defaultdict(list)
+    per_example = []
     for record in tqdm(records, desc="Scoring"):
         score = score_prediction(record, scoring_function)
         scores_by_type[record["question_type"]].append(score)
+        per_example.append({"unique_id": record["unique_id"],
+                            "question_type": record["question_type"],
+                            "score": score})
 
     summary = summarize(scores_by_type)
     print_report(summary, scores_by_type)
@@ -90,6 +94,15 @@ def main():
     with open(args.output, "w", encoding="utf-8") as f:
         json.dump(summary, f, indent=2)
     print(f"\nSummary written to {args.output}")
+
+    # One score per example, so a run can be given a confidence interval and two
+    # runs can be compared on the same examples. Without them a summary number
+    # cannot say whether a 0.5 point difference is a result or a coin flip.
+    scores_path = args.output.replace(".json", ".scores.jsonl")
+    with open(scores_path, "w", encoding="utf-8") as f:
+        for row in per_example:
+            f.write(json.dumps(row) + "\n")
+    print(f"Per-example scores written to {scores_path}")
 
 
 if __name__ == "__main__":
