@@ -10,7 +10,6 @@ proportionally in both sets.  A fixed seed ensures reproducibility.
 
 import argparse
 import json
-import math
 import os
 import random
 from collections import Counter, defaultdict
