@@ -50,13 +50,36 @@ submitting, which is what makes a queued job run what you actually submitted:
 
 ```bash
 scripts/submit.sh scripts/run_abc.sh                       # A, B and C — the reference table
-VARIANT=hedge scripts/submit.sh scripts/agentic/run_c.sh   # C alone, one attempt
-SMOKE=1 scripts/submit.sh scripts/agentic/run_c.sh --time=00:40:00   # 5 examples
-
-export LLM_API_KEY=sk-or-v1-...                            # only for remote models
-scripts/submit.sh scripts/agentic/run_sweep.sh             # C across model sizes
-scripts/submit.sh scripts/agentic/run_smoke.sh             # does a remote model work at all
+SMOKE=1 scripts/submit.sh scripts/agentic/run_c.sh --time=00:40:00   # 5 examples first
 ```
+
+Every knob is an environment variable, so a variant is a submit line rather than
+an edit. The two best configurations at the time of writing:
+
+```bash
+# B — 0.464, 9.9 s/example
+ARMS=Bgated LEGACY=1 CROSS_ENCODER_MODEL=BAAI/bge-reranker-v2-m3 \
+  VARIANT=b-best scripts/submit.sh scripts/baselines/run_b.sh
+
+# C — 0.462, 1.8 tool calls, 15.4 s/example
+UNIFIED=1 FINAL_PASS=1 LEGACY=1 PREVIEW=8 TEXT_GATE=-1 \
+  CROSS_ENCODER_MODEL=BAAI/bge-reranker-v2-m3 \
+  VARIANT=c-best scripts/submit.sh scripts/agentic/run_c.sh
+```
+
+`LEGACY=1` is the answer prompt without a length constraint. It looks like it
+only games BEM, which rewards longer answers, and that is what we assumed for
+weeks — but it also holds the correct answer more often (36.0% against 33.3%),
+because gold answers are ranges and lists that a four-word reply cannot carry.
+
+`TEXT_GATE` is the one piece of orchestration that pays: below that score on the
+best pooled paragraph, a second retrieval round runs. Asking the model to make
+the same call from the prompt instead is worth 1.1 points less.
+
+Run C twice before believing a difference: two runs of the identical
+configuration came out 0.454 and 0.462, so its noise is ~0.8 points against
+~0.1 for B. `src/ablation/compare_runs.py` gives the paired interval, which is
+the only honest way to read gaps that small.
 
 Anything after the script path is passed through to `sbatch`.
 
@@ -154,20 +177,40 @@ src/
   agent/      prompts messages tools rag run metrics   C
               run_inference
   retrieval/  retriever  knowledge_base  reranker  build_kb_sqlite
-  ablation/   parameter sweeps over B
+  ablation/   parameter sweeps, and compare_runs for confidence intervals
 
   Probes live in <pkg>/experiments/ and are never on the inference path:
   agent/experiments/      naming_probe       can the model name what it sees
   retrieval/experiments/  compute_recall*    recall@k of the image index, and query variants
+                          compute_recall_text  what the full-text channel adds
                           compare_rerankers  which cross-encoder surfaces the answer
-                          analyse_pool       image or name: where the right article came from
+                          probe_gate         is the cross-encoder score a usable trigger
+                          analyse_pool       image, name or text: where the article came from
+                          prime_df_cache     term frequencies for the text channel
 scripts/
-  submit.sh          snapshot + submit — the way to launch
-  run_abc.sh         A, B and C for one model — the reference table
-  agentic/run_c.sh   C alone — one variant per run
-  baselines/run_b.sh B and B+ — the retrieval baseline, both arms in one job
-  lib/vllm.sh        serving lifecycle shared by every experiment
-  agentic/  baselines/  retrieval/  setup/
+  submit.sh                     snapshot + submit — the way to launch
+  run_abc.sh                    A, B and C for one model — the reference table
+  lib/vllm.sh                   serving lifecycle shared by every experiment
+
+  baselines/run_b.sh            B, B+, Btext, Bgated — the arms in one job
+  baselines/run_score.sh        score predictions a killed job never got to
+  baselines/run_ablation_cross.sh   top-k / top-n grid over B
+
+  agentic/run_c.sh              C — one variant per run, all knobs via env
+  agentic/run_ablation_c.sh     one-at-a-time sweep of C's parameters
+  agentic/run_naming_crops.sh   can the model name the subject: guesses, prompts, crops
+  agentic/run_sweep.sh          C across model sizes
+  agentic/run_smoke.sh          does a remote model work at all
+
+  retrieval/run_recall*.sh      recall@k of the image index, and its variants
+  retrieval/run_recall_text.sh  what the full-text channel adds
+  retrieval/run_probe_gate.sh   is the cross-encoder score a usable trigger
+  retrieval/run_compare_rerankers.sh   which cross-encoder surfaces the answer
+  retrieval/run_prime_df.sh     fill the term-frequency cache the text channel needs
+
+  setup/build_kb_sqlite.sh      build the KB, and its name index
+  setup/build_paragraph_index.sh   add the full-text index over paragraph text
+  setup/download_model.sh  setup/setup_vllm_venv.sh
 ```
 
 `runner.run_batch` owns the loop, the thread pool, the resume and the writing;
