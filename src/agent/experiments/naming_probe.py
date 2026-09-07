@@ -22,6 +22,7 @@ import base64
 import io
 import json
 import os
+import re
 import sys
 from concurrent.futures import ThreadPoolExecutor
 
@@ -33,7 +34,7 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from tqdm import tqdm
 
 import paths
-from agent.prompts import NAMING_PROMPT
+from agent.prompts import MULTI_NAMING_PROMPTS, NAMING_PROMPT
 from llm import chat_model
 from retrieval.knowledge_base import KnowledgeBase, normalize
 from vlm.dataset import load_dataset
@@ -78,19 +79,32 @@ def data_uri(img):
     return "data:image/jpeg;base64," + base64.b64encode(buf.getvalue()).decode()
 
 
-def name_one(llm, path, variant, boxes, upscale):
+def name_one(llm, path, variant, boxes, upscale, guesses=1, style="diverse"):
+    """The model's name for the subject, or its ``guesses`` best names."""
     try:
         img = variant_image(path, variant, boxes, upscale)
         if img is None:
             return None
+        prompt = (NAMING_PROMPT if guesses == 1
+                  else MULTI_NAMING_PROMPTS[style].format(n=guesses))
         resp = llm.invoke([
-            SystemMessage(content=NAMING_PROMPT),
+            SystemMessage(content=prompt),
             HumanMessage(content=[{"type": "image_url",
                                    "image_url": {"url": data_uri(img)}}]),
         ])
         return resp.content if isinstance(resp.content, str) else str(resp.content)
     except Exception:
         return None
+
+
+def split_guesses(reply, limit):
+    """One name per line, minus the numbering the model adds anyway."""
+    out = []
+    for line in (reply or "").splitlines():
+        name = re.sub(r"^\s*[-*\d.)\s]+", "", line).strip()
+        if name and name not in out:
+            out.append(name)
+    return out[:limit]
 
 
 def norm_url(url):
@@ -108,6 +122,13 @@ def main():
                    help="JSONL of {image_path, box:[x0,y0,x1,y1]} for the 'box' variant")
     p.add_argument("--no-upscale", dest="upscale", action="store_false",
                    help="feed crops at their cropped size instead of rescaling up")
+    p.add_argument("--style", default="diverse",
+                   choices=sorted(MULTI_NAMING_PROMPTS),
+                   help="How to ask for several guesses.")
+    p.add_argument("--guesses", type=int, default=1,
+                   help="Names to ask for. The model resolves one guess to the "
+                        "right article 11.6%% of the time and its wrong guess is "
+                        "usually the right kind of thing, so more may pay.")
     p.add_argument("--limit", type=int, default=1000)
     p.add_argument("--concurrency", type=int, default=8)
     args = p.parse_args()
@@ -142,19 +163,22 @@ def main():
             with ThreadPoolExecutor(max_workers=args.concurrency) as pool:
                 names = list(tqdm(
                     pool.map(lambda it: name_one(llm, it["image_path"], variant,
-                                                 boxes, args.upscale), dataset),
+                                                 boxes, args.upscale, args.guesses,
+                                                 args.style), dataset),
                     total=len(dataset), desc=variant))
             hit = attempted = exact = 0
-            for item, name in zip(dataset, names):
+            for item, reply in zip(dataset, names):
                 gt_url = norm_url(item["wikipedia_url"])
-                ok = bool(name) and resolves(name, gt_url)
+                guesses = split_guesses(reply, args.guesses) if reply else []
+                ok = any(resolves(g, gt_url) for g in guesses)
+                name = guesses[0] if guesses else None
                 attempted += bool(name)
                 hit += ok
                 exact += bool(name) and normalize(name) == normalize(item["wikipedia_title"])
                 out.write(json.dumps({
                     "unique_id": item["unique_id"], "variant": variant,
                     "gt_title": item["wikipedia_title"], "predicted_name": name,
-                    "resolved": ok,
+                    "guesses": guesses, "resolved": ok,
                 }, ensure_ascii=False) + "\n")
             results[variant] = (hit, exact, attempted, len(dataset))
 

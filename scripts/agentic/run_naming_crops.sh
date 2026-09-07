@@ -12,7 +12,14 @@
 #SBATCH --error=logs/naming_crops_%j.err
 #SBATCH --account=cvcs2026
 #
-# Does cropping help the model name what it sees?
+# How well can the model name what it sees, and does asking for more than one
+# guess help? One guess resolves to the right article 11.6% of the time and its
+# wrong guess is usually the right kind of thing (`Gila monster` for a `Tiliqua
+# rugosa`), so the right name is often the second or third candidate. Three
+# guesses reach 17.1%; GUESSES sweeps the number.
+#
+# It also sweeps crops of the query image, which do not help: the rate falls
+# monotonically from 11.7% on the whole image to 8.2% at a 40% centre crop.
 #
 #   scripts/submit.sh scripts/agentic/run_naming_crops.sh
 #   VARIANTS=full,center80,center60,center40 scripts/submit.sh …
@@ -37,7 +44,9 @@ MODEL="${MODEL:-Qwen/Qwen3-VL-8B-Instruct}"
 TAG="${TAG:-qwen3vl8b}"
 GPU_UTIL=0.85          # nothing else on this GPU: no retriever, no reranker
 MAX_LEN=32768
-VARIANTS="${VARIANTS:-full,center80,center60,center40}"
+VARIANTS="${VARIANTS:-full}"
+GUESSES="${GUESSES:-1}"      # space-separated list: sweeps them
+STYLES="${STYLES:-diverse}"  # space-separated list of prompt styles
 UPSCALE="${UPSCALE:-1}"
 LIMIT="${LIMIT:-1000}"
 CONCURRENCY=8
@@ -64,15 +73,21 @@ cd "$PROJECT_DIR"
 mkdir -p "${LOG_DIR:-logs}" "$OUT_DIR"
 source "$CODE_DIR/scripts/lib/vllm.sh"
 
-echo "variants: $VARIANTS   upscale: $UPSCALE   boxes: ${BOXES:-<none>}"
+echo "variants: $VARIANTS   guesses: $GUESSES   upscale: $UPSCALE"
 ensure_vllm_venv
 serve_model "$MODEL" "$GPU_UTIL" "$MAX_LEN"
 
-uv run python "$CODE_DIR"/src/agent/experiments/naming_probe.py \
-    --model-name "$MODEL" --base-url "$BASE_URL" \
-    --output "$OUT_DIR/naming_crops.jsonl" \
-    --variants "$VARIANTS" --limit "$LIMIT" --concurrency "$CONCURRENCY" \
-    "${FLAGS[@]}"
+for G in $GUESSES; do
+  for S in $STYLES; do
+    echo "################ guesses=$G style=$S"
+    uv run python "$CODE_DIR"/src/agent/experiments/naming_probe.py \
+        --model-name "$MODEL" --base-url "$BASE_URL" \
+        --output "$OUT_DIR/naming_g${G}_${S}.jsonl" \
+        --variants "$VARIANTS" --guesses "$G" --style "$S" \
+        --limit "$LIMIT" --concurrency "$CONCURRENCY" \
+        "${FLAGS[@]}"
+  done
+done
 
 stop_model
 cat "$CODE_DIR/RUN_INFO" 2>/dev/null || echo "code: live tree"
