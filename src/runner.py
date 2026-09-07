@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from tqdm import tqdm
@@ -32,8 +33,16 @@ def run_batch(items: list[dict], predict, output: str, concurrency: int = 8,
     means the output order is not the dataset order.
     """
     failures: list[str] = []
+    elapsed: list[float] = []
 
     def work(item):
+        t0 = time.time()
+        try:
+            return _work(item)
+        finally:
+            elapsed.append(time.time() - t0)
+
+    def _work(item):
         if not os.path.exists(item["image_path"]):
             tqdm.write(f"missing image: {item['image_path']}")
             return build_record(item, None)
@@ -56,4 +65,9 @@ def run_batch(items: list[dict], predict, output: str, concurrency: int = 8,
         print(f"{len(failures)}/{len(items)} examples failed:")
         for msg, n in Counter(failures).most_common(3):
             print(f"  [{n}x] {msg[:160]}")
+    if elapsed:
+        from statistics import mean, median
+        print(f"Seconds per example: mean {mean(elapsed):.2f}, median {median(elapsed):.2f}")
+        meta.update(avg_seconds_per_example=round(mean(elapsed), 2),
+                    median_seconds_per_example=round(median(elapsed), 2))
     provenance.stamp(output, examples=len(items), failures=len(failures), **meta)

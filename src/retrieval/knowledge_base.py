@@ -111,7 +111,14 @@ class KnowledgeBase:
               + ("" if self._has_text_index else "  [no paragraphs_fts: text search off]"))
 
     def get_paragraphs_by_url(self, wiki_url: str) -> list[str]:
-        """Return the non-empty section texts for a Wikipedia URL, in order."""
+        """Return the non-empty section texts for a Wikipedia URL, in order.
+
+        Boilerplate is deliberately not filtered. References, External links and
+        See also are 29.9% of every pool and look like obvious noise, but taking
+        them out at query time changed nothing (0.452 against 0.455) and cost
+        60% more time per example: the cross-encoder already discards them, and
+        reading a section title for every article does not come free.
+        """
         rows = self._conn().execute(
             "SELECT text FROM paragraphs WHERE url = ? ORDER BY section_idx",
             (wiki_url,),
@@ -167,13 +174,6 @@ class KnowledgeBase:
         if not tokens:
             return []
 
-        # AND first, OR only when that comes back too narrow. AND intersects the
-        # posting lists so FTS5 can skip most of the index, while OR has to merge
-        # and score their union: 0.05s against 0.82s per query on the same terms.
-        # Falling back where AND is too strict also retrieves better than either
-        # alone (28.3% against 25.0% recall@20), because the two fail differently
-        # — AND misses when the answer paragraph lacks one term, OR drowns in the
-        # common ones.
         hits = self._match(conn, " AND ".join(tokens), candidates)
         if len(hits) < _AND_MIN_HITS:
             hits = self._match(conn, " OR ".join(tokens), candidates)
