@@ -1,4 +1,5 @@
 import os
+import re
 import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
@@ -9,10 +10,10 @@ from tqdm import tqdm
 
 import paths
 from agent.messages import image_to_data_uri
-from agent.prompts import NAMING_PROMPT
+from agent.prompts import MULTI_NAMING_PROMPTS, NAMING_PROMPT
 from llm import VLMClient
 from prompts import (NO_RAG_PROMPT, NO_RAG_PROMPT_LEGACY, RAG_PROMPT,
-                     RAG_PROMPT_LEGACY, extract_answer)
+                     RAG_PROMPT_DIRECT, RAG_PROMPT_LEGACY, extract_answer)
 from retrieval.bm25 import BM25Ranker
 from retrieval.knowledge_base import KnowledgeBase, load_df_cache
 from retrieval.fusion import rank_paragraphs
@@ -22,8 +23,9 @@ from vlm.arg_parser import parse_args
 from vlm.dataset import build_record
 
 
-def build_rag_prompt(question, paragraphs, legacy=False):
-    template = RAG_PROMPT_LEGACY if legacy else RAG_PROMPT
+def build_rag_prompt(question, paragraphs, legacy=False, direct=False):
+    template = (RAG_PROMPT_DIRECT if direct else
+                RAG_PROMPT_LEGACY if legacy else RAG_PROMPT)
     return template.format(context="\n\n".join(paragraphs), question=question)
 
 
@@ -51,28 +53,58 @@ def setup_retrieval(top_k, retrieval_strategy, no_rerank):
     return retriever, kb, reranker, bm25
 
 
-def name_entity(model, image_path):
-    """What the model thinks the image shows, as a bare Wikipedia-style name.
+def name_entity(model, image_path, guesses=1):
+    """What the model thinks the image shows, as bare Wikipedia-style names.
 
     Image only, no question: the name is a retrieval key, and letting the
     question leak in makes the model answer instead of naming.
+
+    Asking for more than one pays because the model is usually wrong: one guess
+    resolves to the right article 11.8% of the time, three reach 17.1% and lift
+    pool coverage from 58.9% to 60.9%. Five add 0.4 points and eight nothing, so
+    three is where the curve flattens.
+
+    The wording matters as much as the number. Asking for candidates that are
+    genuinely different beats asking for close relatives (17.1% against 14.4%):
+    the first guess is wrong 88% of the time, so three names around it are three
+    names in the wrong place.
     """
+    prompt = (NAMING_PROMPT if guesses == 1
+              else MULTI_NAMING_PROMPTS["diverse"].format(n=guesses))
     resp = model.llm.invoke([
-        SystemMessage(content=NAMING_PROMPT),
+        SystemMessage(content=prompt),
         HumanMessage(content=[
             {"type": "image_url", "image_url": {"url": image_to_data_uri(image_path)}},
         ]),
     ])
-    return (resp.content if isinstance(resp.content, str) else str(resp.content)).strip()
+    text = (resp.content if isinstance(resp.content, str) else str(resp.content)).strip()
+    if guesses == 1:
+        return [text] if text else []
+    names = []
+    for line in text.splitlines():
+        n = re.sub(r"^\s*[-*\d.)\s]+", "", line).strip()
+        if n and n not in names:
+            names.append(n)
+    return names[:guesses]
 
 
-def name_articles(kb, name, limit):
-    """Articles the predicted name resolves to, as retrieval results."""
-    if not name:
-        return []
-    return [{"wiki_url": h["wiki_url"], "title": h["title"], "score": None,
-             "source": "name", "match": h["match"]}
-            for h in kb.lookup_articles(name, limit=limit)]
+def name_articles(kb, names, limit):
+    """Articles the predicted names resolve to, deduplicated, best guess first.
+
+    ``limit`` is per guess, so three guesses can bring in three times as many
+    articles as one. That is not free — the text channel showed a bigger pool
+    costing 9 points on the examples whose article was already there — so the
+    two are separate knobs rather than one.
+    """
+    out, seen = [], set()
+    for name in ([names] if isinstance(names, str) else names or []):
+        for h in kb.lookup_articles(name, limit=limit):
+            if h["wiki_url"] in seen:
+                continue
+            seen.add(h["wiki_url"])
+            out.append({"wiki_url": h["wiki_url"], "title": h["title"], "score": None,
+                        "source": "name", "match": h["match"]})
+    return out
 
 
 def text_articles(kb, question, limit):
@@ -223,7 +255,7 @@ def main():
             try:
                 name, extra = None, []
                 if args.use_naming:
-                    name = name_entity(model, item["image_path"])
+                    name = name_entity(model, item["image_path"], args.naming_guesses)
                     extra = name_articles(kb, name, args.naming_limit)
                 if args.use_text and args.text_gate is None:
                     extra = extra + text_articles(kb, item["question"], args.text_limit)
@@ -241,7 +273,7 @@ def main():
                     if args.use_naming:
                         retrieved["predicted_name"] = name
                     prompt = build_rag_prompt(item["question"], paragraphs,
-                                              args.legacy_prompt)
+                                              args.legacy_prompt, args.direct_prompt)
             except Exception as e:
                 tqdm.write(f"retrieval failed for {item['unique_id']}: {e}")
 
@@ -260,7 +292,7 @@ def main():
               use_text=args.use_text, text_limit=args.text_limit,
               text_gate=args.text_gate,
               reranker=paths.CROSS_ENCODER_MODEL,
-              legacy_prompt=args.legacy_prompt)
+              legacy_prompt=args.legacy_prompt, direct_prompt=args.direct_prompt)
     print(f"Done. Predictions saved to {args.output}")
 
 

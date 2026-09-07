@@ -62,11 +62,13 @@ ARMS="${ARMS:-B Bplus Btext Bgated}"
 TOP_K="${TOP_K:-20}"
 TOP_N="${TOP_N:-20}"
 BM25_TOP_M="${BM25_TOP_M:-50}"
-NAMING_LIMIT="${NAMING_LIMIT:-3}"
+NAMING_LIMIT="${NAMING_LIMIT:-3}"    # articles kept per guess
+NAMING_GUESSES="${NAMING_GUESSES:-1}"
 TEXT_LIMIT="${TEXT_LIMIT:-5}"
 POOL_ARTICLES="${POOL_ARTICLES:-20}"
 TEXT_GATE="${TEXT_GATE:--1}"
 LEGACY="${LEGACY:-0}"
+DIRECT="${DIRECT:-0}"
 
 PROJECT_DIR="${SLURM_SUBMIT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
 VENV="/homes/$USER/vllm_venv"
@@ -75,6 +77,7 @@ OUT_DIR="outputs/baselines/$TAG/${RUN_ID:-manual}"
 
 PROMPT=()
 [ "$LEGACY" = "1" ] && PROMPT=(--legacy-prompt)
+[ "$DIRECT" = "1" ] && PROMPT=(--direct-prompt)
 
 if [ "${SMOKE:-0}" = "1" ]; then
     LIMIT=(--limit 5); DEBUG="${DEBUG:-5}"; OUT_DIR="$OUT_DIR/smoke"
@@ -104,10 +107,10 @@ serve_model "$MODEL" "$GPU_UTIL" "$MAX_LEN"
 for ARM in $ARMS; do
     CHANNELS=()
     case "$ARM" in
-        Bplus) CHANNELS=(--use-naming --naming-limit "$NAMING_LIMIT") ;;
-        Btext) CHANNELS=(--use-naming --naming-limit "$NAMING_LIMIT"
+        Bplus) CHANNELS=(--use-naming --naming-limit "$NAMING_LIMIT" --naming-guesses "$NAMING_GUESSES") ;;
+        Btext) CHANNELS=(--use-naming --naming-limit "$NAMING_LIMIT" --naming-guesses "$NAMING_GUESSES"
                          --use-text --text-limit "$TEXT_LIMIT") ;;
-        Bgated) CHANNELS=(--use-naming --naming-limit "$NAMING_LIMIT"
+        Bgated) CHANNELS=(--use-naming --naming-limit "$NAMING_LIMIT" --naming-guesses "$NAMING_GUESSES"
                           --use-text --text-limit "$TEXT_LIMIT"
                           --text-gate "$TEXT_GATE") ;;
     esac

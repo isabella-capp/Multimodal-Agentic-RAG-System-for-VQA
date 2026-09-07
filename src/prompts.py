@@ -80,3 +80,29 @@ in the image.
 {question}
 
 """
+
+
+# The long-form prompt, minus the preambles. Answers that open with "Based on
+# the provided context, the insect in the image..." appeared in three of ten
+# sampled templated failures: the answer is in there, buried, and BEM scores the
+# whole string. This asks for the same free-form length — which BEM rewards, and
+# which the answer-format block gives up — without the throat-clearing, and asks
+# for the full range when the passage gives one, since a gold answer of
+# "63 to 65 days or 54 to 70 days" is missed by a reply of "63 to 65 days".
+RAG_PROMPT_DIRECT = """\
+Answer the question concisely based on the provided image and the following \
+context. Strictly use only the information provided in the context or visible \
+in the image.
+
+Start with the answer itself. Do not open with "Based on the context", "The \
+image shows" or any similar preamble. If the context gives a range, several \
+values or several places, give all of them as the context states them, with the \
+same units and wording.
+
+--- CONTEXT ---
+{context}
+
+--- QUESTION ---
+{question}
+
+"""
