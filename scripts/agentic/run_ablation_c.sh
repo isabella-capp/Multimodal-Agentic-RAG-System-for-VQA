@@ -79,8 +79,8 @@ echo "$CONFIGS" | while read -r NAME PREVIEW TEXTL NAMES LOOKUP GATE ITERS; do
     echo "################ $NAME  preview=$PREVIEW text=$TEXTL names=$NAMES lookup=$LOOKUP gate=$GATE iters=$ITERS"
     uv run python "$CODE_DIR"/src/agent/run_inference.py \
         --model-name "$MODEL" --base-url "$BASE_URL" --output "$OUT" \
-        --unified --final-pass --legacy-prompt \
-        --top-k 20 --rerank-top-n 20 --retrieval-mode reranker \
+        --final-pass --legacy-prompt \
+        --top-k 20 --rerank-top-n 20 --tools-strategy bge \
         --preview "$PREVIEW" --text-limit "$TEXTL" --max-names "$NAMES" \
         --lookup-limit "$LOOKUP" --text-gate "$GATE" --max-iterations "$ITERS" \
         --concurrency "$CONCURRENCY" --debug-samples 0 --limit "$LIMIT" || continue

@@ -10,13 +10,13 @@ from langchain_core.messages import AIMessage, ToolMessage
 from langgraph.errors import GraphRecursionError
 
 from agent.messages import build_user_message
-from agent.prompts import PREVIEW_PROMPT, SYSTEM_PROMPT, UNIFIED_PROMPT
+from agent.prompts import PREVIEW_PROMPT, UNIFIED_PROMPT
 from agent.run import AgentRun
 from agent.tools import build_tools
 from prompts import (RAG_PROMPT, RAG_PROMPT_DIRECT, RAG_PROMPT_LEGACY,
                      extract_answer)
 from retrieval.bm25 import BM25Ranker
-from retrieval.fusion import rank_paragraphs
+from retrieval.fusion import Ranking, rank_paragraphs
 
 
 def open_text_gate(state: dict, tool_name: str, threshold: float) -> Any:
@@ -62,34 +62,27 @@ class AgenticRAG:
     model decides whether to enter by name or by image, and which to read.
     """
 
-    def __init__(self, llm, retriever, kb, reranker, top_n=5, top_k=20,
-                 bm25_top_m=50, max_iterations=8,
-                 retrieval_mode: str = "bm25+reranker", rrf_k: int = 60,
+    def __init__(self, llm, retriever, kb, reranker,
+                 ranking: Ranking = Ranking(), top_k=20, max_iterations=8,
                  text_limit: int = 5, max_names: int = 4, lookup_limit: int = 3,
                  text_gate: float | None = None,
                  final_pass: bool = False, legacy_prompt: bool = False,
-                 unified: bool = False, direct_prompt: bool = False,
-                 with_read: bool = True, preview: int = 0):
+                 direct_prompt: bool = False, preview: int = 0):
         self.llm = llm
         self.retriever = retriever
         self.kb = kb
         self.reranker = reranker
         self.bm25 = BM25Ranker()
-        self.top_n = top_n
+        self.ranking = ranking
         self.top_k = top_k
-        self.bm25_top_m = bm25_top_m
         self.max_iterations = max_iterations
-        self.retrieval_mode = retrieval_mode
-        self.rrf_k = rrf_k
         self.text_limit = text_limit
         self.max_names = max_names
         self.lookup_limit = lookup_limit
         self.text_gate = text_gate
         self.final_pass = final_pass
         self.legacy_prompt = legacy_prompt
-        self.unified = unified
         self.direct_prompt = direct_prompt
-        self.with_read = with_read
         self.preview = preview
 
     def _middleware(self, question: str, state: dict) -> list[Any]:
@@ -126,18 +119,14 @@ class AgenticRAG:
         agent = create_agent(
             model=self.llm,
             tools=build_tools(self.retriever, self.kb, self.reranker, self.bm25,
-                              image, top_n=self.top_n, top_k=self.top_k,
-                              bm25_top_m=self.bm25_top_m,
-                              retrieval_mode=self.retrieval_mode,
-                              rrf_k=self.rrf_k,
+                              image, top_k=self.top_k,
+                              ranking=self.ranking,
                               text_limit=self.text_limit,
                               max_names=self.max_names,
                               lookup_limit=self.lookup_limit,
-                              state=state, unified=self.unified,
-                              with_read=self.with_read,
+                              state=state,
                               preview=self.preview, question=question),
-            system_prompt=(PREVIEW_PROMPT if self.preview else
-                           UNIFIED_PROMPT if self.unified else SYSTEM_PROMPT),
+            system_prompt=PREVIEW_PROMPT if self.preview else UNIFIED_PROMPT,
             middleware=self._middleware(question, state),
         )
 
@@ -178,9 +167,11 @@ class AgenticRAG:
                       wiki_url=c.wiki_url)]
         if not pooled:
             return None
-        best = rank_paragraphs(question, pooled, strategy="bge", top_k=self.top_n,
-                               reranker=self.reranker, bm25_ranker=self.bm25,
-                               bm25_top_m=self.bm25_top_m, rrf_k=self.rrf_k)
+        best = rank_paragraphs(question, pooled, strategy=self.ranking.final,
+                               top_k=self.ranking.top_n, reranker=self.reranker,
+                               bm25_ranker=self.bm25,
+                               bm25_top_m=self.ranking.bm25_top_m,
+                               rrf_k=self.ranking.rrf_k)
         if not best:
             return None
         template = (RAG_PROMPT_DIRECT if self.direct_prompt else

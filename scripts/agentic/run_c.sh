@@ -26,30 +26,47 @@
 
 set -euo pipefail
 
-MODEL="Qwen/Qwen3-VL-8B-Instruct"
-TAG="qwen3vl8b"
-GPU_UTIL=0.50      # the retriever and reranker share this GPU
-MAX_LEN=32768
+MODEL="${MODEL:-Qwen/Qwen3-VL-8B-Instruct}"
+TAG="${TAG:-qwen3vl8b}"
+
+# Every default below is our best measured C (0.470 +/- 0.003 on the 8B), so a
+# bare run reproduces it and a variant is one variable away. They were 0 for a
+# long time and we passed the real values by hand each time, which is how a C
+# ended up measured against B with the wrong retrieval mode.
+#
+# To vary one, set it: PREVIEW=0, UNIFIED=0, TEXT_GATE= (empty turns the gate
+# off), FINAL_PASS=0, WITH_READ=0.
+GPU_UTIL="${GPU_UTIL:-0.50}"      # the retriever and reranker share this GPU
+MAX_LEN="${MAX_LEN:-32768}"
 TOP_K="${TOP_K:-20}"
 TOP_N="${TOP_N:-20}"
 BM25_TOP_M="${BM25_TOP_M:-50}"
 CONCURRENCY=4
-TEXT_GATE="${TEXT_GATE:-}"
-FINAL_PASS="${FINAL_PASS:-0}"
-LEGACY="${LEGACY:-0}"
-UNIFIED="${UNIFIED:-0}"
+TEXT_GATE="${TEXT_GATE--1}"   # no colon: TEXT_GATE= (empty) turns the gate off
+FINAL_PASS="${FINAL_PASS:-1}"
+LEGACY="${LEGACY:-1}"
 DIRECT="${DIRECT:-0}"
-WITH_READ="${WITH_READ:-1}"
-PREVIEW="${PREVIEW:-0}"
+PREVIEW="${PREVIEW:-8}"
 TEXT_LIMIT="${TEXT_LIMIT:-5}"
 MAX_NAMES="${MAX_NAMES:-4}"
 LOOKUP_LIMIT="${LOOKUP_LIMIT:-3}"
 MAX_IT="${MAX_IT:-12}"
-# Paragraph retrieval pipeline:
-#   bm25+reranker  — BM25 pre-filter (top-M) -> cross-encoder [default]
-#   reranker       — all paragraphs directly to cross-encoder (no BM25)
-#   rrf            — BM25 + BGE independent rankings -> Reciprocal Rank Fusion
-RETRIEVAL_MODE="${RETRIEVAL_MODE:-rrf}"
+# One strategy per ranking operation, from fusion.STRATEGIES. They are three
+# different operations and the best value differs for each, which is the whole
+# reason they are separate:
+#
+#   TOOLS_STRATEGY    what the agent reads mid-loop.  rrf.
+#   PREVIEW_STRATEGY  the passages shown beside the image candidates.  bge —
+#                     and never measured against anything else, because it was
+#                     hard-coded until now. The ablation swept how MANY passages
+#                     (4/8/16) while the ranking that picks them was fixed.
+#   FINAL_STRATEGY    the ranking the answer is generated from.  bge 0.4740
+#                     against rrf 0.4610. Note B goes the other way on what is
+#                     nominally the same operation — rrf 0.4760 twice against
+#                     bm25_bge 0.4660 — which we cannot yet explain.
+TOOLS_STRATEGY="${TOOLS_STRATEGY:-rrf}"
+PREVIEW_STRATEGY="${PREVIEW_STRATEGY:-bge}"
+FINAL_STRATEGY="${FINAL_STRATEGY:-bge}"
 
 PROJECT_DIR="${SLURM_SUBMIT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
 VENV="/homes/$USER/vllm_venv"
@@ -60,9 +77,7 @@ FORCE=()
 [ -n "$TEXT_GATE" ] && FORCE+=(--text-gate "$TEXT_GATE")
 [ "$FINAL_PASS" = "1" ] && FORCE+=(--final-pass)
 [ "$LEGACY" = "1" ] && FORCE+=(--legacy-prompt)
-[ "$UNIFIED" = "1" ] && FORCE+=(--unified)
 [ "$DIRECT" = "1" ] && FORCE+=(--direct-prompt)
-[ "$WITH_READ" = "0" ] && FORCE+=(--no-read-article)
 [ "$PREVIEW" != "0" ] && FORCE+=(--preview "$PREVIEW")
 
 if [ "${SMOKE:-0}" = "1" ]; then
@@ -74,7 +89,7 @@ fi
 export HF_HOME="/work/cvcs2026/recursive_retrievers/hf_cache/huggingface"
 export HF_HUB_OFFLINE=1
 export PYTHONUNBUFFERED=1
-export CROSS_ENCODER_MODEL="${CROSS_ENCODER_MODEL:-BAAI/bge-reranker-base}"
+export CROSS_ENCODER_MODEL="${CROSS_ENCODER_MODEL:-BAAI/bge-reranker-v2-m3}"
 export VLLM_USE_FLASHINFER_SAMPLER=0
 export PATH="$HOME/.local/bin:$PATH"
 export TFHUB_CACHE_DIR="/work/cvcs2026/recursive_retrievers/tfhub_cache"
@@ -86,20 +101,26 @@ cd "$PROJECT_DIR"
 mkdir -p "${LOG_DIR:-logs}" "$OUT_DIR"
 source "$CODE_DIR/scripts/lib/vllm.sh"
 
-echo "reranker: $CROSS_ENCODER_MODEL   retrieval-mode: $RETRIEVAL_MODE   bm25-m: $BM25_TOP_M   gate: ${TEXT_GATE:-off}"
+echo "reranker: $CROSS_ENCODER_MODEL   strategies: $TOOLS_STRATEGY/$PREVIEW_STRATEGY/$FINAL_STRATEGY   bm25-m: $BM25_TOP_M   gate: ${TEXT_GATE:-off}"
 ensure_vllm_venv
-serve_model "$MODEL" "$GPU_UTIL" "$MAX_LEN"
+serve_model "$MODEL" "$GPU_UTIL" "$MAX_LEN" "${NEED_GB:-25}"
 
-echo "################ C — agentic  ($MODEL${VARIANT:+, variant $VARIANT}, retrieval-mode=$RETRIEVAL_MODE)"
+# With VLLM_GPU set, the server has its own card; everything the Python
+# side loads goes on the other one.
+[ -n "${RETRIEVER_GPU:-}" ] && export CUDA_VISIBLE_DEVICES="$RETRIEVER_GPU"
+
+echo "################ C — agentic  ($MODEL${VARIANT:+, variant $VARIANT}, strategies=$TOOLS_STRATEGY/$PREVIEW_STRATEGY/$FINAL_STRATEGY)"
 MODE_SUFFIX=""
-[ "$RETRIEVAL_MODE" != "bm25+reranker" ] && MODE_SUFFIX="_${RETRIEVAL_MODE//+/}"
+MODE_SUFFIX="_${TOOLS_STRATEGY}"
 uv run python "$CODE_DIR"/src/agent/run_inference.py \
     --model-name "$MODEL" --base-url "$BASE_URL" \
     --output "$OUT_DIR/predictions_C${MODE_SUFFIX}.jsonl" \
     --top-k "$TOP_K" --rerank-top-n "$TOP_N" --bm25-top-m "$BM25_TOP_M" \
     --max-iterations "$MAX_IT" --text-limit "$TEXT_LIMIT" \
     --max-names "$MAX_NAMES" --lookup-limit "$LOOKUP_LIMIT" \
-    --retrieval-mode "$RETRIEVAL_MODE" \
+    --tools-strategy "$TOOLS_STRATEGY" \
+    --preview-strategy "$PREVIEW_STRATEGY" \
+    --final-strategy "$FINAL_STRATEGY" \
     --concurrency "$CONCURRENCY" --debug-samples "$DEBUG" \
     "${FORCE[@]}" "${LIMIT[@]}"
 

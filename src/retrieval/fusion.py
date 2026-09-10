@@ -12,10 +12,8 @@ Strategies
 ``"bge"``
     BGE cross-encoder over the full paragraph pool; no BM25 pre-filter.
 ``"bm25_bge"``
-    BM25 top-M pre-filter → BGE top-K.
-    **This is the current default pipeline.**  Calling with
-    ``strategy="bm25_bge"``, ``bm25_top_m=50``, ``top_k=5`` is identical
-    to the previous hard-coded behaviour and preserves all existing results.
+    BM25 top-M pre-filter → BGE top-K.  BM25 has veto power here: a paragraph
+    outside its top-M is never scored by the cross-encoder, however relevant.
 ``"rrf"``
     BM25 and BGE are run **independently** over the full paragraph pool, then
     fused with Reciprocal Rank Fusion.  Both rankings see the same pool with
@@ -24,10 +22,48 @@ Strategies
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 from retrieval.bm25 import BM25Ranker
 from retrieval.reranker import CrossEncoderReranker
 
 STRATEGIES = ("bm25", "bge", "bm25_bge", "rrf")
+
+
+@dataclass(frozen=True)
+class Ranking:
+    """Which strategy each ranking operation uses, and the numbers behind it.
+
+    These four were always passed together and separately, which is how the two
+    hard-coded ones stayed invisible: `preview` and `final` were written into the
+    call sites, so no flag reached them and not one of our runs could vary them.
+    The defaults are the best measured value *per operation* — they differ, and
+    that is the finding, not an oversight:
+
+    ``tools``   what the agent reads mid-loop. rrf.
+    ``preview`` the passages shown beside the image candidates. bge — and NEVER
+                MEASURED against anything else, because it was unreachable. The
+                ablation swept how many passages (4/8/16) while the ranking that
+                picks them was fixed.
+    ``final``   the ranking that produces C's answer. bge 0.4740 against rrf
+                0.4610, so this one stays bge. Note B's answer ranking goes the
+                other way — rrf 0.4760 twice against bm25_bge 0.4660 — on what
+                is nominally the same operation. Unexplained; the pools differ.
+    """
+
+    tools: str = "rrf"
+    preview: str = "bge"
+    final: str = "bge"
+    top_n: int = 20
+    bm25_top_m: int = 50
+    rrf_k: int = 60
+
+    def __post_init__(self):
+        for field in ("tools", "preview", "final"):
+            value = getattr(self, field)
+            if value not in STRATEGIES:
+                raise ValueError(
+                    f"Ranking.{field}={value!r} is not one of {STRATEGIES}")
 
 
 def rrf_score(rankings: list[list[str]], rrf_k: int = 60) -> list[str]:
