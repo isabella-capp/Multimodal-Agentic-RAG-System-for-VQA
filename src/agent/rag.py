@@ -31,9 +31,11 @@ def open_text_gate(state: dict, tool_name: str, threshold: float) -> Any:
     @wrap_model_call
     def middleware(request, handler):
         score = state.get("top_score")
-        if score is not None and score < threshold and should_force(
-                request.messages, tool_name):
-            return handler(request.override(tool_choice=tool_name))
+        if score is not None and score < threshold:
+            state["gate_below"] = state.get("gate_below", 0) + 1
+            if should_force(request.messages, tool_name):
+                state["forced"] = state.get("forced", 0) + 1
+                return handler(request.override(tool_choice=tool_name))
         return handler(request)
 
     return middleware
@@ -156,6 +158,8 @@ class AgenticRAG:
             if answer is not None:
                 run.prediction = answer
 
+        run.gate_below = state.get("gate_below", 0)
+        run.forced = state.get("forced", 0)
         run.elapsed_seconds = round(time.time() - t0, 2)
         return run
 

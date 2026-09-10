@@ -52,6 +52,8 @@ class AgentRun:
     elapsed_seconds: float = 0.0
     error: str | None = None
     messages: list[Any] = field(default_factory=list)  # kept only for tracing
+    gate_below: int = 0
+    forced: int = 0
 
     @classmethod
     def from_messages(cls, messages: list) -> "AgentRun":
