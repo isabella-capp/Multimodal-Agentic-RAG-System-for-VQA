@@ -70,7 +70,13 @@ NAMING_GUESSES="${NAMING_GUESSES:-3}"
 TEXT_LIMIT="${TEXT_LIMIT:-5}"
 POOL_ARTICLES="${POOL_ARTICLES:-20}"
 TEXT_GATE="${TEXT_GATE:--1}"
-RETRIEVAL_STRATEGY="${RETRIEVAL_STRATEGY:-bm25_bge}"
+# rrf scored 0.4760 twice against 0.4660 +/- 0.0026 for three runs of bm25_bge,
+# so it is the default. The per-example paired test does not separate them
+# (+0.011, CI [-0.009, +0.032]), which is worth knowing before quoting the point
+# difference; what carries it is that two independent rrf runs landed on the same
+# value. The gate is unaffected either way — both send the whole pool to the
+# cross-encoder, and measured, it opens 400 times against 409.
+RETRIEVAL_STRATEGY="${RETRIEVAL_STRATEGY:-rrf}"
 LEGACY="${LEGACY:-1}"
 DIRECT="${DIRECT:-0}"
 
