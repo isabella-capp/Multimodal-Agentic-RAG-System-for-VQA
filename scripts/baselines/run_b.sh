@@ -14,6 +14,7 @@
 #
 # The retrieval baseline, in its two arms, on one vLLM server.
 #
+#   A      no retrieval — the reference for what the weights alone know
 #   B      image retrieval only — the reference pipeline
 #   B+     same, plus one naming call whose resolved articles join the pool
 #   Btext  same as B+, plus the question searched against the paragraph index
@@ -41,10 +42,11 @@
 # the agent can enter the KB by name and B cannot, so without B+ a win for C
 # would only show that the name channel works.
 #
-#   scripts/submit.sh scripts/baselines/run_b.sh                       # both arms
-#   ARMS=B scripts/submit.sh scripts/baselines/run_b.sh                # B alone
-#   LEGACY=1 scripts/submit.sh scripts/baselines/run_b.sh              # no answer-format block
-#   CROSS_ENCODER_MODEL=BAAI/bge-reranker-v2-m3 scripts/submit.sh …    # another reranker
+#   scripts/submit.sh scripts/baselines/run_b.sh                       # every arm
+#   ARMS=Bgated scripts/submit.sh scripts/baselines/run_b.sh           # the best one
+#   LEGACY=0 scripts/submit.sh scripts/baselines/run_b.sh              # answer-format block
+#   NAMING_GUESSES=1 scripts/submit.sh scripts/baselines/run_b.sh      # one name guess
+#   CROSS_ENCODER_MODEL=BAAI/bge-reranker-base scripts/submit.sh …     # the smaller reranker
 #
 # Both arms run in one job on purpose: two runs of the same configuration a week
 # apart scored 0.395 and 0.392, so a gap under ~0.3 points is not a result
@@ -52,22 +54,24 @@
 
 set -euo pipefail
 
-MODEL="Qwen/Qwen3-VL-8B-Instruct"
-TAG="qwen3vl8b"
-GPU_UTIL=0.50
+MODEL="${MODEL:-Qwen/Qwen3-VL-8B-Instruct}"
+TAG="${TAG:-qwen3vl8b}"
+GPU_UTIL="${GPU_UTIL:-0.50}"
 MAX_LEN=32768
 CONCURRENCY=8
 
 ARMS="${ARMS:-B Bplus Btext Bgated}"
+
 TOP_K="${TOP_K:-20}"
 TOP_N="${TOP_N:-20}"
 BM25_TOP_M="${BM25_TOP_M:-50}"
-NAMING_LIMIT="${NAMING_LIMIT:-3}"    # articles kept per guess
-NAMING_GUESSES="${NAMING_GUESSES:-1}"
+NAMING_LIMIT="${NAMING_LIMIT:-1}"    # articles kept per guess
+NAMING_GUESSES="${NAMING_GUESSES:-3}"
 TEXT_LIMIT="${TEXT_LIMIT:-5}"
 POOL_ARTICLES="${POOL_ARTICLES:-20}"
 TEXT_GATE="${TEXT_GATE:--1}"
-LEGACY="${LEGACY:-0}"
+RETRIEVAL_STRATEGY="${RETRIEVAL_STRATEGY:-bm25_bge}"
+LEGACY="${LEGACY:-1}"
 DIRECT="${DIRECT:-0}"
 
 PROJECT_DIR="${SLURM_SUBMIT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
@@ -88,7 +92,7 @@ fi
 export HF_HOME="/work/cvcs2026/recursive_retrievers/hf_cache/huggingface"
 export HF_HUB_OFFLINE=1
 export PYTHONUNBUFFERED=1
-export CROSS_ENCODER_MODEL="${CROSS_ENCODER_MODEL:-BAAI/bge-reranker-base}"
+export CROSS_ENCODER_MODEL="${CROSS_ENCODER_MODEL:-BAAI/bge-reranker-v2-m3}"
 export VLLM_USE_FLASHINFER_SAMPLER=0
 export PATH="$HOME/.local/bin:$PATH"
 export TFHUB_CACHE_DIR="/work/cvcs2026/recursive_retrievers/tfhub_cache"
@@ -102,11 +106,14 @@ source "$CODE_DIR/scripts/lib/vllm.sh"
 
 echo "arms: $ARMS   reranker: $CROSS_ENCODER_MODEL   legacy-prompt: $LEGACY"
 ensure_vllm_venv
-serve_model "$MODEL" "$GPU_UTIL" "$MAX_LEN"
+serve_model "$MODEL" "$GPU_UTIL" "$MAX_LEN" "${NEED_GB:-25}"
+
+[ -n "${RETRIEVER_GPU:-}" ] && export CUDA_VISIBLE_DEVICES="$RETRIEVER_GPU"
 
 for ARM in $ARMS; do
-    CHANNELS=()
+    CHANNELS=(); RETRIEVAL=(--use-retrieval)
     case "$ARM" in
+        A) RETRIEVAL=() ;;   # no retrieval at all: what the weights alone know
         Bplus) CHANNELS=(--use-naming --naming-limit "$NAMING_LIMIT" --naming-guesses "$NAMING_GUESSES") ;;
         Btext) CHANNELS=(--use-naming --naming-limit "$NAMING_LIMIT" --naming-guesses "$NAMING_GUESSES"
                          --use-text --text-limit "$TEXT_LIMIT") ;;
@@ -118,7 +125,8 @@ for ARM in $ARMS; do
     uv run python "$CODE_DIR"/src/vlm/run_inference.py \
         --model-name "$MODEL" --base-url "$BASE_URL" \
         --output "$OUT_DIR/predictions_$ARM.jsonl" \
-        --use-retrieval --top-k "$TOP_K" --rerank-top-n "$TOP_N" --bm25-top-m "$BM25_TOP_M" \
+        "${RETRIEVAL[@]}" --top-k "$TOP_K" --rerank-top-n "$TOP_N" --bm25-top-m "$BM25_TOP_M" \
+        --retrieval-strategy "$RETRIEVAL_STRATEGY" \
         --concurrency "$CONCURRENCY" --debug-samples "$DEBUG" \
         "${CHANNELS[@]}" "${PROMPT[@]}" "${LIMIT[@]}"
 done

@@ -57,17 +57,14 @@ Every knob is an environment variable, so a variant is a submit line rather than
 an edit. The two best configurations at the time of writing:
 
 ```bash
-# B — 0.464, 9.9 s/example
-ARMS=Bgated LEGACY=1 CROSS_ENCODER_MODEL=BAAI/bge-reranker-v2-m3 \
-  VARIANT=b-best scripts/submit.sh scripts/baselines/run_b.sh
+# B — 0.466 +/- 0.003, 9.9 s/example
+ARMS=Bgated VARIANT=b-best scripts/submit.sh scripts/baselines/run_b.sh
 
-# C — 0.462, 1.8 tool calls, 15.4 s/example
-UNIFIED=1 FINAL_PASS=1 LEGACY=1 PREVIEW=8 TEXT_GATE=-1 \
-  CROSS_ENCODER_MODEL=BAAI/bge-reranker-v2-m3 \
-  VARIANT=c-best scripts/submit.sh scripts/agentic/run_c.sh
+# C — 0.470 +/- 0.003, 1.8 tool calls, 15.4 s/example
+VARIANT=c-best scripts/submit.sh scripts/agentic/run_c.sh
 ```
 
-`LEGACY=1` is the answer prompt without a length constraint. It looks like it
+`LEGACY=1`, now the default, is the answer prompt without a length constraint. It looks like it
 only games BEM, which rewards longer answers, and that is what we assumed for
 weeks — but it also holds the correct answer more often (36.0% against 33.3%),
 because gold answers are ranges and lists that a four-word reply cannot carry.
@@ -76,10 +73,19 @@ because gold answers are ranges and lists that a four-word reply cannot carry.
 best pooled paragraph, a second retrieval round runs. Asking the model to make
 the same call from the prompt instead is worth 1.1 points less.
 
-Run C twice before believing a difference: two runs of the identical
-configuration came out 0.454 and 0.462, so its noise is ~0.8 points against
-~0.1 for B. `src/ablation/compare_runs.py` gives the paired interval, which is
-the only honest way to read gaps that small.
+Three repetitions of each configuration put the run-to-run spread at 0.0026
+for B and 0.0030 for C — a third of a point, not the 0.8 an early pair of runs
+suggested. That is still wide enough to swallow the gap between the two
+pipelines: the paired difference is +0.0040 with a CI of [-0.021, +0.029], 112
+examples better and 110 worse. `src/ablation/compare_runs.py` gives that
+interval, which is the only honest way to read gaps this small.
+
+These lines are short because the scripts now *default* to the configuration
+each number was measured with, so a bare run reproduces it and a variant is one
+variable away. It used to be the other way round — the defaults were the
+pre-tuning values and the real ones were passed by hand on every launch. That
+is how a C got measured against B with the wrong retrieval mode, worth 1.3
+points, and nobody noticed until the commands were diffed.
 
 Anything after the script path is passed through to `sbatch`.
 
