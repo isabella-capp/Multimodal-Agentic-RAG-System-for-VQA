@@ -38,10 +38,25 @@ _stage_weights() {
     rm -rf "$STAGED_DIR"; STAGED_DIR=""; return 1
 }
 
+_pick_cuda_home() {
+    local best
+    best=$(ls -d /homes/admin/spack/opt/spack/linux-x86_64_v2/cuda-1[3-9].*/ \
+                 /homes/admin/spack/opt/spack/linux-x86_64_v2/cuda-12.9*/ 2>/dev/null |
+           sort -V | tail -1 || true)
+    [ -n "$best" ] && [ -x "${best}bin/nvcc" ] || return 0
+    export CUDA_HOME="${best%/}"
+    export PATH="$CUDA_HOME/bin:$PATH"
+    echo "CUDA_HOME -> $CUDA_HOME ($("$CUDA_HOME/bin/nvcc" --version | grep -o 'release [0-9.]*'))"
+}
+
 # serve_model <model_id> [gpu_util] [max_model_len] [need_gb]
 serve_model() {
     local model="$1" gpu_util="${2:-0.50}" max_len="${3:-32768}" need_gb="${4:-25}"
-    local serve="$model" ticks=120 extra=()
+    local serve="$model" ticks=240 extra=()
+
+    _pick_cuda_home
+    export PATH="$VENV/bin:$PATH"
+    export FLASHINFER_NVCC_THREADS="${SLURM_CPUS_PER_TASK:-4}"
 
     if _stage_weights "$model" "$need_gb"; then
         serve="$STAGED_DIR"
@@ -56,6 +71,9 @@ serve_model() {
         *Qwen2.5-VL*) extra=(--chat-template "${CODE_DIR:-$PROJECT_DIR}/scripts/agentic/qwen2.5-vl-tool-chat-template.jinja") ;;
     esac
 
+    [ "${TP:-1}" -gt 1 ] && extra+=(--tensor-parallel-size "$TP") || true
+
+    CUDA_VISIBLE_DEVICES="${VLLM_GPU:-${CUDA_VISIBLE_DEVICES:-}}" \
     "$VENV/bin/vllm" serve "$serve" --port "$PORT" \
         --served-model-name "$model" \
         --gpu-memory-utilization "$gpu_util" --max-model-len "$max_len" \

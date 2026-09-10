@@ -5,7 +5,7 @@
 #SBATCH --ntasks=1
 #SBATCH --mem=16G
 #SBATCH --cpus-per-task=4
-#SBATCH --time=03:00:00
+#SBATCH --time=04:00:00
 #SBATCH --output=/homes/%u/cvcs2026/logs/hf_download_%j.out
 #SBATCH --error=/homes/%u/cvcs2026/logs/hf_download_%j.err
 #SBATCH --account=cvcs2026
