@@ -31,6 +31,21 @@ cp pyproject.toml uv.lock "$SNAP"/ 2>/dev/null || true
     echo "dirty:   $(git status --porcelain 2>/dev/null | wc -l) files"
     echo "script:  $SCRIPT"
     echo "vllm:    $("/homes/$USER/vllm_venv/bin/vllm" --version 2>/dev/null | head -1 || echo "not built yet")"
+    echo "sbatch:  $*"
+    # The knobs, as they were at launch. Without these the snapshot says which
+    # code ran but not which configuration, and the two are equally necessary:
+    # two 1-GPU C jobs launched a minute apart differed only by TEXT_GATE, which
+    # was recoverable solely from the predictions meta.json once they finished.
+    # Empty means "set but empty" (TEXT_GATE= turns the gate off), which is not
+    # the same as absent, so print it only when the name is in the environment.
+    for k in MODEL TAG SETTINGS ARMS GPU_UTIL MAX_LEN TP VLLM_GPU RETRIEVER_GPU \
+             NEED_GB CROSS_ENCODER_MODEL RETRIEVAL_MODE RETRIEVAL_STRATEGY FINAL_MODE \
+             TOP_K TOP_N BM25_TOP_M \
+             TEXT_GATE TEXT_LIMIT PREVIEW MAX_NAMES LOOKUP_LIMIT MAX_IT \
+             NAMING_GUESSES NAMING_LIMIT UNIFIED FINAL_PASS LEGACY DIRECT \
+             WITH_READ CONCURRENCY LIMIT SMOKE RESUME_DIR; do
+        [ -z "${!k+x}" ] || echo "env:     $k=${!k}"
+    done
 } > "$SNAP/RUN_INFO"
 git diff HEAD > "$SNAP/uncommitted.diff" 2>/dev/null || true
 
