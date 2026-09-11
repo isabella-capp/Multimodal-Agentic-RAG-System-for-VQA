@@ -214,14 +214,14 @@ def main():
         direct_prompt=args.direct_prompt,
 
         preview=args.preview,
-        final_pass_mode=args.final_pass_mode,
         text_limit=args.text_limit, max_names=args.max_names,
         lookup_limit=args.lookup_limit,
         bm25_top_m=args.bm25_top_m,
         max_iterations=args.max_iterations,
-
         reranker=paths.CROSS_ENCODER_MODEL,
-        retrieval_mode=args.retrieval_mode,
+        tools_strategy=args.tools_strategy,
+        preview_strategy=args.preview_strategy,
+        final_strategy=args.final_strategy,
         rrf_k=args.rrf_k,
     )
 
