@@ -8,6 +8,19 @@ from pydantic import BaseModel, Field
 from retrieval.knowledge_base import normalize
 from retrieval.fusion import Ranking, rank_paragraphs
 
+class LookupArticleInput(BaseModel):
+    name: str = Field(..., description="The exact name of the entity, person, or object to look up on Wikipedia.")
+
+
+class SearchParagraphsInput(BaseModel):
+    query: str = Field(..., description="A short, highly focused keyword phrase (e.g. 'Arabidopsis lyrata outcrossing') to find specific information. Do not use full sentences or questions.")
+
+
+class ReadArticleInput(BaseModel):
+    title: str = Field(..., description="The EXACT title of the Wikipedia article, exactly as it appeared in previous tool results.")
+    query: str = Field(..., description="The keyword phrase to search for inside this specific article.")
+
+
 class SearchInput(BaseModel):
     query: str = Field(..., description="Keywords describing what you need to know: what the question asks about, plus any distinctive term. Rare words find things, generic ones ('large', 'population', 'typically') do not.")
     names: list[str] = Field(default_factory=list, description="Titles of articles to open as well, exactly as they appeared in a previous tool result. Give the ones that could plausibly be the subject; leave empty if none look right.")
@@ -30,7 +43,7 @@ def build_tools(retriever, kb, reranker, bm25, image,
                 ranking: Ranking = Ranking(),
                 top_k=20, lookup_limit=3,
                 text_limit: int = 5, state=None,
-                max_names: int = 4,
+                max_names: int = 4, tool_set: str = "minimal",
                 preview: int = 0, question: str = ""):
     """Retrieval tools for one query image, over a working set the agent grows.
 
@@ -184,5 +197,48 @@ def build_tools(retriever, kb, reranker, bm25, image,
             _register_lookup(kb.lookup_articles(query, limit=lookup_limit))
         _register_text(kb.search_articles_by_text(query, limit=text_limit))
         return _rank_pool(query)
+
+    # Ablation only: the four-tool interface every C before 2026-09-04 used.
+    # It exists so "does a smaller tool surface help?" can be asked as one
+    # variable — the claim that shrinking it made three middlewares redundant
+    # had no single-variable support until this did.
+    if tool_set == "legacy":
+        @tool(args_schema=LookupArticleInput)
+        def lookup_article(name: str) -> str:
+            """Add Wikipedia articles matching an entity name to the candidate pool."""
+            hits = kb.lookup_articles(name, limit=lookup_limit)
+            if not hits:
+                return f"No article found for '{name}'."
+            _register_lookup(hits)
+            return "Added to the pool:\n" + "\n".join(
+                f"- {h['title']}" for h in hits)
+
+        @tool(args_schema=ReadArticleInput)
+        def read_article(title: str, query: str) -> str:
+            """Extract relevant text passages from one specific candidate article."""
+            cand = next((c for c in candidates.values() if c.title == title), None)
+            url = cand.wiki_url if cand else None
+            if url is None:
+                hits = kb.lookup_articles(title, limit=1)
+                if not hits:
+                    return f"Unknown article '{title}'."
+                url = hits[0]["wiki_url"]
+                _register_lookup(hits)
+            paragraphs = kb.get_paragraphs_by_url(wiki_url=url)
+            if not paragraphs:
+                return f"No text available for '{title}'."
+            results = rank_paragraphs(
+                query, paragraphs, strategy=ranking.tools, top_k=ranking.top_n,
+                bm25_top_m=ranking.bm25_top_m, bm25_ranker=bm25,
+                reranker=reranker, rrf_k=ranking.rrf_k)
+            return _format([(title, p) for p in results]) if results else \
+                "No relevant paragraphs found."
+
+        @tool(args_schema=SearchParagraphsInput)
+        def search_paragraphs(query: str) -> str:
+            """Search for relevant passages across ALL currently loaded articles."""
+            return _rank_pool(query)
+
+        return [lookup_article, search_by_image, search_paragraphs, read_article]
 
     return [search_by_image, search]

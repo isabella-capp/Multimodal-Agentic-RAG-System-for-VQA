@@ -70,6 +70,10 @@ def parse_args():
     # One strategy name per ranking operation, from the same vocabulary as
     # fusion.STRATEGIES. Defaults are the best measured value for each; see
     # Ranking for the numbers and for which of them nobody has measured yet.
+    p.add_argument("--tool-set", default="minimal", choices=["minimal", "legacy"],
+                   help="Ablation: 'minimal' is the two tools every current "
+                        "run uses; 'legacy' is the four-tool interface, so the "
+                        "tool surface can be varied as one variable.")
     p.add_argument("--tools-strategy", default=Ranking.tools, choices=STRATEGIES,
                    help="How the tools rank what the agent reads mid-loop.")
     p.add_argument("--preview-strategy", default=Ranking.preview, choices=STRATEGIES,
@@ -107,7 +111,7 @@ def build_agent(args):
                       final_pass=args.final_pass,
                       legacy_prompt=args.legacy_prompt,
                       direct_prompt=args.direct_prompt,
-                      preview=args.preview,
+                      preview=args.preview, tool_set=args.tool_set,
                       text_limit=args.text_limit, max_names=args.max_names,
                       lookup_limit=args.lookup_limit)
 
@@ -214,6 +218,7 @@ def main():
         direct_prompt=args.direct_prompt,
 
         preview=args.preview,
+        tool_set=args.tool_set,
         text_limit=args.text_limit, max_names=args.max_names,
         lookup_limit=args.lookup_limit,
         bm25_top_m=args.bm25_top_m,

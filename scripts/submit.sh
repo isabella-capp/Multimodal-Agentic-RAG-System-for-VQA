@@ -40,7 +40,7 @@ cp pyproject.toml uv.lock "$SNAP"/ 2>/dev/null || true
     # the same as absent, so print it only when the name is in the environment.
     for k in MODEL TAG SETTINGS ARMS GPU_UTIL MAX_LEN TP VLLM_GPU RETRIEVER_GPU \
              NEED_GB CROSS_ENCODER_MODEL RETRIEVAL_STRATEGY \
-             TOOLS_STRATEGY PREVIEW_STRATEGY FINAL_STRATEGY \
+             TOOL_SET TOOLS_STRATEGY PREVIEW_STRATEGY FINAL_STRATEGY \
              TOP_K TOP_N BM25_TOP_M \
              TEXT_GATE TEXT_LIMIT PREVIEW MAX_NAMES LOOKUP_LIMIT MAX_IT \
              NAMING_GUESSES NAMING_LIMIT FINAL_PASS LEGACY DIRECT \

@@ -10,7 +10,7 @@ from langchain_core.messages import AIMessage, ToolMessage
 from langgraph.errors import GraphRecursionError
 
 from agent.messages import build_user_message
-from agent.prompts import PREVIEW_PROMPT, UNIFIED_PROMPT
+from agent.prompts import PREVIEW_PROMPT, SYSTEM_PROMPT, UNIFIED_PROMPT
 from agent.run import AgentRun
 from agent.tools import build_tools
 from prompts import (RAG_PROMPT, RAG_PROMPT_DIRECT, RAG_PROMPT_LEGACY,
@@ -67,7 +67,8 @@ class AgenticRAG:
                  text_limit: int = 5, max_names: int = 4, lookup_limit: int = 3,
                  text_gate: float | None = None,
                  final_pass: bool = False, legacy_prompt: bool = False,
-                 direct_prompt: bool = False, preview: int = 0):
+                 direct_prompt: bool = False, preview: int = 0,
+                 tool_set: str = "minimal"):
         self.llm = llm
         self.retriever = retriever
         self.kb = kb
@@ -84,6 +85,7 @@ class AgenticRAG:
         self.legacy_prompt = legacy_prompt
         self.direct_prompt = direct_prompt
         self.preview = preview
+        self.tool_set = tool_set
 
     def _middleware(self, question: str, state: dict) -> list[Any]:
         """The one middleware left, and the only one that ever earned its place.
@@ -104,7 +106,11 @@ class AgenticRAG:
         """
         if self.text_gate is None:
             return []
-        return [open_text_gate(state, "search", self.text_gate)]
+        # The gate forces a tool by name, so the name has to exist in the set
+        # that is installed: `search` in the minimal one, `search_paragraphs` in
+        # the four-tool ablation. Forcing a missing tool is an API error.
+        second = "search_paragraphs" if self.tool_set == "legacy" else "search"
+        return [open_text_gate(state, second, self.text_gate)]
 
     def run(self, image_path: str, question: str) -> AgentRun:
         t0 = time.time()
@@ -124,9 +130,13 @@ class AgenticRAG:
                               text_limit=self.text_limit,
                               max_names=self.max_names,
                               lookup_limit=self.lookup_limit,
-                              state=state,
+                              state=state, tool_set=self.tool_set,
                               preview=self.preview, question=question),
-            system_prompt=PREVIEW_PROMPT if self.preview else UNIFIED_PROMPT,
+            # The prompt must name the tools that are there: SYSTEM_PROMPT
+            # for the four-tool ablation, PREVIEW_PROMPT (UNIFIED_PROMPT plus
+            # the preview paragraph) or UNIFIED_PROMPT for the minimal set.
+            system_prompt=(SYSTEM_PROMPT if self.tool_set == "legacy" else
+                           PREVIEW_PROMPT if self.preview else UNIFIED_PROMPT),
             middleware=self._middleware(question, state),
         )
 

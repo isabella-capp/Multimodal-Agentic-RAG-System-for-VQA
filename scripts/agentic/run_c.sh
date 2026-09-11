@@ -64,6 +64,8 @@ MAX_IT="${MAX_IT:-12}"
 #                     against rrf 0.4610. Note B goes the other way on what is
 #                     nominally the same operation — rrf 0.4760 twice against
 #                     bm25_bge 0.4660 — which we cannot yet explain.
+# minimal = the two tools; legacy = the four-tool interface, for the ablation.
+TOOL_SET="${TOOL_SET:-minimal}"
 TOOLS_STRATEGY="${TOOLS_STRATEGY:-rrf}"
 PREVIEW_STRATEGY="${PREVIEW_STRATEGY:-bge}"
 FINAL_STRATEGY="${FINAL_STRATEGY:-bge}"
@@ -118,6 +120,7 @@ uv run python "$CODE_DIR"/src/agent/run_inference.py \
     --top-k "$TOP_K" --rerank-top-n "$TOP_N" --bm25-top-m "$BM25_TOP_M" \
     --max-iterations "$MAX_IT" --text-limit "$TEXT_LIMIT" \
     --max-names "$MAX_NAMES" --lookup-limit "$LOOKUP_LIMIT" \
+    --tool-set "$TOOL_SET" \
     --tools-strategy "$TOOLS_STRATEGY" \
     --preview-strategy "$PREVIEW_STRATEGY" \
     --final-strategy "$FINAL_STRATEGY" \
