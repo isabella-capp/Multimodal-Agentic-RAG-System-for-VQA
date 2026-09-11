@@ -25,6 +25,7 @@ class SearchInput(BaseModel):
     query: str = Field(..., description="Keywords describing what you need to know: what the question asks about, plus any distinctive term. Rare words find things, generic ones ('large', 'population', 'typically') do not.")
     names: list[str] = Field(default_factory=list, description="Titles of articles to open as well, exactly as they appeared in a previous tool result. Give the ones that could plausibly be the subject; leave empty if none look right.")
 
+@dataclass
 class Candidate:
     """One article in the working set, with its provenance."""
 
