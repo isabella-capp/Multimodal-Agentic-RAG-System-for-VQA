@@ -9,28 +9,6 @@
 #SBATCH --output=logs/fi_warm_%j.out
 #SBATCH --error=logs/fi_warm_%j.err
 #SBATCH --account=cvcs2026
-#
-# Compile FlashInfer's SM 12.x kernels ahead of time, for the RTXPro6000B nodes.
-#
-#   scripts/submit.sh scripts/setup/warm_flashinfer.sh
-#
-# No GPU: the architecture is passed explicitly through FLASHINFER_CUDA_ARCH_LIST
-# instead of being probed from a device, so this compiles on a CPU node and does
-# not spend the account's GPU quota. The result lands in ~/.cache/flashinfer,
-# which every node reads, so afterwards vLLM starts in minutes there.
-#
-# Why it exists: the 96 GB cards are Blackwell (sm_120), and FlashInfer builds
-# its kernels on first use with $CUDA_HOME/bin/nvcc. Two things broke there, and
-# both cost a queued job each to find:
-#
-#   - the toolkit loaded by default is 12.6, and FlashInfer refuses sm_120 below
-#     12.9 — vLLM dies with "No supported CUDA architectures found for major
-#     versions [12]" the moment it builds a MoE layer;
-#   - the compile step shells out to a bare "ninja", which lives in the vLLM
-#     venv's bin, not on PATH.
-#
-# scripts/lib/vllm.sh fixes both for the serving path; this script does the slow
-# part once, off the GPU queue.
 
 set -euo pipefail
 
@@ -48,9 +26,6 @@ CUDA_HOME="${CUDA_HOME%/}"
 export CUDA_HOME
 export PATH="$VENV/bin:$CUDA_HOME/bin:$PATH"
 export FLASHINFER_CUDA_ARCH_LIST="${FLASHINFER_CUDA_ARCH_LIST:-12.0}"
-# One nvcc on a CUTLASS MoE translation unit peaks around 10-20 GB, so the
-# thread count is what sets the memory bill: 16 threads on 32 GB got every
-# compiler killed and ninja exited 255.
 export FLASHINFER_NVCC_THREADS="${SLURM_CPUS_PER_TASK:-8}"
 
 cd "$PROJECT_DIR"

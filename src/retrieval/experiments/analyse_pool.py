@@ -1,11 +1,3 @@
-"""Where the right article comes from: the image index, the name, or neither.
-
-Retrieval-only, no generation and no BEM. Answer accuracy conditional on
-reading the right article is already known to be stable (~0.66 when right,
-~0.14 when wrong), so the right-article rate is what a change to the pool can
-actually move — and this is the cheapest way to see whether it moved.
-"""
-
 import argparse
 import json
 import os
@@ -22,7 +14,7 @@ def norm(url):
 
 
 def main():
-    p = argparse.ArgumentParser(description=__doc__)
+    p = argparse.ArgumentParser(description="Channel composition of the candidate pool.")
     p.add_argument("--predictions", required=True)
     p.add_argument("--output", default=None)
     args = p.parse_args()

@@ -1,15 +1,4 @@
-# Serve a local model on vLLM. Sourced by the experiment scripts, which then
-# contain only their experiment.
-#
-#   source scripts/lib/vllm.sh
-#   serve_model "Qwen/Qwen3-VL-8B-Instruct" 0.50 32768 && ... ; stop_model
-#
-# Exposes $PORT and $BASE_URL. Requires $VENV, $HF_HOME and $PROJECT_DIR.
 
-# localhost is per NODE, and SLURM packs several jobs onto one node. A fixed port
-# collides with anyone else serving vLLM there: the health check passes against
-# THEIR server and the run silently uses the wrong model. Derive it from the job
-# id, below the ephemeral range.
 PORT=$((10000 + ${SLURM_JOB_ID:-0} % 20000))
 BASE_URL="http://localhost:$PORT/v1"
 
@@ -22,8 +11,6 @@ vllm_cleanup() {
 }
 trap vllm_cleanup EXIT
 
-# Copy the snapshot to node-local disk: loading weights from /work (BEEGFS) is a
-# lottery under contention, while a plain sequential copy stays fast.
 _stage_weights() {
     local model="$1" need_gb="$2" snap avail
     snap=$(ls -d "$HF_HOME"/hub/"models--${model//\//--}"/snapshots/*/ 2>/dev/null | head -1)
@@ -49,7 +36,6 @@ _pick_cuda_home() {
     echo "CUDA_HOME -> $CUDA_HOME ($("$CUDA_HOME/bin/nvcc" --version | grep -o 'release [0-9.]*'))"
 }
 
-# serve_model <model_id> [gpu_util] [max_model_len] [need_gb]
 serve_model() {
     local model="$1" gpu_util="${2:-0.50}" max_len="${3:-32768}" need_gb="${4:-25}"
     local serve="$model" ticks=240 extra=()
@@ -65,8 +51,6 @@ serve_model() {
         ticks=1200
     fi
 
-    # Qwen2.5-VL ships a vision-only template with no tool-calling; Qwen3-VL and
-    # later carry a correct one, so only patch the models that need it.
     case "$model" in
         *Qwen2.5-VL*) extra=(--chat-template "${CODE_DIR:-$PROJECT_DIR}/scripts/agentic/qwen2.5-vl-tool-chat-template.jinja") ;;
     esac
@@ -89,8 +73,6 @@ serve_model() {
     done
     curl -sf "http://localhost:$PORT/health" >/dev/null 2>&1 || { echo "vLLM did not start"; return 1; }
 
-    # Health alone is not enough: confirm the server answering is ours and serves
-    # the model we asked for, rather than somebody else's that grabbed the port.
     if ! curl -sf "http://localhost:$PORT/v1/models" | grep -q "\"$model\""; then
         echo "port $PORT answers but does not serve $model — refusing to run."
         curl -sf "http://localhost:$PORT/v1/models" || true
@@ -105,7 +87,6 @@ stop_model() {
     sleep 20  # let the GPU drain before the next server
 }
 
-# Build the isolated vLLM venv on first use (kept on /homes; /work is too slow).
 ensure_vllm_venv() {
     [ -x "$VENV/bin/vllm" ] && return 0
     echo "creating vLLM venv at $VENV ..."

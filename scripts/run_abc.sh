@@ -11,35 +11,8 @@
 #SBATCH --output=logs/abc_%j.out
 #SBATCH --error=logs/abc_%j.err
 #SBATCH --account=cvcs2026
-#
-# 96G, not the 32G the single-setting runners use: that is enough for an 8B at
-# TP=1 and not for a 30B at TP=2, where two resident vLLM workers plus the FAISS
-# index plus EVA-CLIP-8B loading peaked past 35G and the job was OOM-killed the
-# moment B started. The L40S nodes have 515G, so the headroom costs nothing.
 
 set -euo pipefail
-
-# A, B and C at their best configurations, against ONE vLLM server in one job:
-# same weights, same endpoint, same examples, so they differ only in method.
-# Two runs of the same configuration land within ~0.3 points, and the gaps we
-# care about are that size, so anything measured across separate jobs is noise.
-#
-#   scripts/submit.sh scripts/run_abc.sh
-#
-# On a bigger model, split the weights over two cards with TP and leave a third
-# for EVA-CLIP and the reranker. The L40S nodes carry 4 GPUs each and there are
-# nine of them, so this both fits and queues:
-#
-#   MODEL=Qwen/Qwen3-VL-30B-A3B-Instruct TAG=qwen3vl30b GPU_UTIL=0.85 \
-#     TP=2 VLLM_GPU=0,1 RETRIEVER_GPU=2 NEED_GB=70 \
-#     scripts/submit.sh scripts/run_abc.sh \
-#       --constraint=gpu_L40S_45G --gres=gpu:3 --time=16:00:00
-#
-# Not the 96 GB RTXPro6000B nodes, even though one card would hold the model:
-# they are Blackwell (sm_120) and the project's torch is pinned to cu124, which
-# stops at sm_90 — vLLM serves there once scripts/setup/warm_flashinfer.sh has
-# run, but EVA-CLIP dies with "no kernel image is available for execution on the
-# device" the moment B or C starts. L40S is Ada, where the stack is proven.
 
 MODEL="${MODEL:-Qwen/Qwen3-VL-8B-Instruct}"
 TAG="${TAG:-qwen3vl8b}"
@@ -49,17 +22,12 @@ TOP_K="${TOP_K:-20}"
 TOP_N="${TOP_N:-20}"
 CONCURRENCY="${CONCURRENCY:-8}"
 
-# How the tools rank what the agent reads mid-loop. The preview and the final
-# pass have their own strategies, defaulted in fusion.Ranking — they are not the
-# same operation and the best value differs for each.
 TOOLS_STRATEGY="${TOOLS_STRATEGY:-rrf}"
 
-# B: image + three name guesses + the text channel behind the cross-encoder gate
 NAMING_GUESSES="${NAMING_GUESSES:-3}"
 NAMING_LIMIT="${NAMING_LIMIT:-1}"
 TEXT_LIMIT="${TEXT_LIMIT:-5}"
 TEXT_GATE="${TEXT_GATE:--1}"
-# C: one search tool, a passage preview, the same gate, answer from the pipeline
 PREVIEW="${PREVIEW:-8}"
 SETTINGS="${SETTINGS:-A B C}"
 

@@ -10,9 +10,6 @@
 #SBATCH --error=/homes/%u/cvcs2026/logs/hf_download_%j.err
 #SBATCH --account=cvcs2026
 
-# Download a HuggingFace model into the shared /work cache (needs internet;
-# serial-queue nodes have it). Usage: sbatch download_model.sh [MODEL_ID]
-
 set -euo pipefail
 export HF_HOME="/work/cvcs2026/recursive_retrievers/hf_cache/huggingface"
 export PATH="$HOME/.local/bin:$PATH"

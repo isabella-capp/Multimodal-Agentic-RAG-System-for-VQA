@@ -1,19 +1,3 @@
-"""Recall@k at the PARAGRAPH level for multiple retrieval strategies.
-
-For each example in the dataset:
-  1. Retrieve top-K articles via EVA-CLIP / FAISS (image query).
-  2. Expand the paragraph pool from all retrieved articles.
-  3. For each requested mode, rank the pool and record whether a gold
-     paragraph (any paragraph containing the ground-truth answer substring)
-     appears in the top k.
-
-Usage
------
-    # All configurations in one pass:
-    uv run python src/retrieval/experiments/compute_recall_paragraphs.py \
-        --modes bm25_top50 bge_top20 bm25_50_bge_20 rrf_top20
-"""
-
 from __future__ import annotations
 
 import argparse
@@ -37,8 +21,6 @@ from vlm.dataset import load_dataset
 BASE_FOLDER = "/work/cvcs2026/encyclopedic"
 REPORT_KS = [1, 3, 5, 10, 20, 50]
 
-# ── Valid mode catalogue ──────────────────────────────────────────────────────
-
 _LEGACY_MODES   = ["bm25", "reranker", "bm25+reranker"]
 _BM25_MODES     = ["bm25_top5", "bm25_top10", "bm25_top20", "bm25_top50"]
 _BGE_MODES      = ["bge_top5", "bge_top10", "bge_top20"]
@@ -50,8 +32,6 @@ _RRF_MODES      = ["rrf_top5", "rrf_top10", "rrf_top20"]
 
 ALL_MODES = _LEGACY_MODES + _BM25_MODES + _BGE_MODES + _BM25_BGE_MODES + _RRF_MODES
 
-
-# ── CLI ──────────────────────────────────────────────────────────────────────
 
 def parse_args():
     p = argparse.ArgumentParser(
@@ -70,19 +50,16 @@ def parse_args():
     p.add_argument("--bm25-top-m", type=int, default=50)
     p.add_argument("--rerank-top-n", type=int, default=20)
     p.add_argument("--rrf-k", type=int, default=60)
-    
-    # FIX: Aggiornati i default ai nomi moderni che stiamo testando
+
     p.add_argument("--modes", nargs="+", choices=ALL_MODES,
                    default=["bge_top20", "bm25_50_bge_20", "bm25_top50"],
                    help="Retrieval modes to evaluate.")
-                   
+
     p.add_argument("--limit", type=int, default=None)
     p.add_argument("--report-only", action="store_true",
                    help="Skip inference; print recall table from an existing output file.")
     return p.parse_args()
 
-
-# ── Mode parsing ─────────────────────────────────────────────────────────────
 
 def _parse_mode(mode: str, default_bm25_top_m: int, default_rerank_top_n: int) -> dict:
     if mode == "bm25":
@@ -113,8 +90,6 @@ def _parse_mode(mode: str, default_bm25_top_m: int, default_rerank_top_n: int) -
     raise ValueError(f"Unknown mode: {mode!r}")
 
 
-# ── Per-example ranking ───────────────────────────────────────────────────────
-
 def _gold_ranks(
     query: str,
     answer: str,
@@ -126,20 +101,16 @@ def _gold_ranks(
     default_rerank_top_n: int,
     rrf_k: int,
 ) -> dict[str, int | None]:
-    
+
     results: dict[str, int | None] = {}
     if not paragraphs:
         return {m: None for m in modes}
 
-    # FIX CRITICO: Parsing intelligente della ground truth (VQA format)
-    # L'answer può essere "Option A | Option B"
-    # E ogni opzione può essere "Entity 1 && Entity 2"
     def is_gold(p_text: str) -> bool:
         p_lower = p_text.lower()
         alternatives = answer.split("|")
         for alt in alternatives:
             parts = [part.strip().lower() for part in alt.split("&&") if part.strip()]
-            # Se TUTTE le entità richieste da questa alternativa sono nel paragrafo, è GOLD
             if parts and all(part in p_lower for part in parts):
                 return True
         return False
@@ -152,7 +123,6 @@ def _gold_ranks(
 
     parsed = {m: _parse_mode(m, default_bm25_top_m, default_rerank_top_n) for m in modes}
 
-    # ── Compute caches ────────────────────────────────────────────────────────
     need_bm25 = any(p["strategy"] in ("bm25", "bm25_bge", "rrf") for p in parsed.values())
     need_bge_full = any(p["strategy"] in ("bge", "rrf") for p in parsed.values())
 
@@ -171,7 +141,7 @@ def _gold_ranks(
     bge_of_bm25: dict[int, list[str]] = {}
     for p in parsed.values():
         if p["strategy"] == "bm25_bge" and p["bm25_top_m"] not in bge_of_bm25:
-            m_val: int = p["bm25_top_m"]  
+            m_val: int = p["bm25_top_m"]
             bm25_slice = bm25_full[:m_val]
             if bm25_slice and reranker is not None:
                 bge_of_bm25[m_val] = reranker.rerank(
@@ -180,7 +150,6 @@ def _gold_ranks(
             else:
                 bge_of_bm25[m_val] = bm25_slice
 
-    # ── Evaluate each mode ────────────────────────────────────────────────────
     for mode, spec in parsed.items():
         strategy, top_k, bm25_top_m = spec["strategy"], spec["top_k"], spec["bm25_top_m"]
 
@@ -205,8 +174,6 @@ def _gold_ranks(
 
     return results
 
-
-# ── Report & Main (Invariati) ────────────────────────────────────────────────
 
 def report(path: str, modes: list[str]) -> None:
     records = [json.loads(l) for l in open(path, encoding="utf-8") if l.strip()]
@@ -335,7 +302,6 @@ def main():
             out.flush()
 
     report(args.output, args.modes)
-
 
 if __name__ == "__main__":
     main()

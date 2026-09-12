@@ -10,9 +10,6 @@ _SPACE = re.compile(r"\s+")
 _PAREN = re.compile(r"\s*\([^)]*\)")
 _STOP = {"the", "a", "an", "of", "in", "and", "on", "at"}
 
-# Question words carry no content but appear in millions of paragraphs, so they
-# dominate the cost of a full-text search without narrowing it: "this" is in
-# 2.46M paragraphs and "where" in 1.08M, against 50k for "indies".
 _QUESTION_WORDS = {
     "what", "which", "who", "whom", "whose", "where", "when", "why", "how",
     "this", "that", "these", "those", "is", "are", "was", "were", "be", "been",
@@ -27,14 +24,7 @@ _DF_CACHE: dict[str, int] = {}   # term -> paragraphs containing it
 
 
 def load_df_cache(path: str) -> int:
-    """Prime the term-frequency cache from disk.
-
-    Counting how many paragraphs hold a term is one query over 14.1M rows, and
-    a cold run pays it for every new word: warming up on the 1000 test questions
-    took an hour on the cluster against six minutes locally, purely in first
-    touches. The counts never change unless the KB is rebuilt, so they belong on
-    disk. ``scripts/retrieval/run_prime_df.sh`` fills the file once on CPU.
-    """
+    """Prime the term-frequency cache from disk."""
     if not path or not os.path.exists(path):
         return 0
     with open(path, encoding="utf-8") as f:
@@ -58,11 +48,7 @@ def normalize(text: str) -> str:
 
 
 def alias_forms(title: str) -> list[str]:
-    """Surface forms for a title, most specific first.
-
-    Ordered, not a set: lookup tries them in turn, and set iteration order over
-    strings varies between processes, which would make matches non-reproducible.
-    """
+    """Surface forms for a title, most specific first."""
     base = normalize(title)
     forms = [base, normalize(_PAREN.sub("", title))]
     forms += [f[4:] for f in forms if f.startswith("the ")]
@@ -77,32 +63,11 @@ def title_tokens(title: str) -> set[str]:
 
 
 class KnowledgeBase:
-    """Read-only encyclopedic KB backed by a SQLite file.
-
-    Build the file once with ``src/retrieval/build_kb_sqlite.py``, then add the
-    name-lookup tables with ``src/retrieval/build_title_index.py``. Lookups hit
-    the disk on demand, so the 20 GB KB is never loaded into memory.
-
-    ``lookup_articles`` resolves an entity NAME to its article by string matching
-    — deliberately not by embedding: the EVA-CLIP text tower is misaligned with
-    the image index (0% recall@50 even given the ground-truth title), and exact
-    matching is anyway more precise than similarity for near-identical names.
-
-    Three ways in: ``lookup_articles`` by name, the image index (elsewhere), and
-    ``search_articles_by_text`` by what the question asks about. Only the last
-    does not depend on the model recognising or naming the subject.
-
-    Thread-safe: each thread gets its own connection (SQLite connections cannot
-    be shared across threads for concurrent queries). The DB is opened read-only,
-    so concurrent readers are fine.
-    """
+    """Read-only encyclopedic KB backed by a SQLite file."""
 
     def __init__(self, db_path: str):
         self.db_path = db_path
-        # read-only but NOT immutable: immutable=1 promises SQLite the bytes
-        # never change, and the KB gains indexes over time (paragraphs_fts was
-        # added after the first runs). A reader holding that promise while the
-        # file changes gets wrong rows, not an error.
+        # read-only but not immutable: the KB gains indexes between runs
         self._uri = f"file:{db_path}?mode=ro"
         self._local = threading.local()
         self._has_text_index = bool(self._conn().execute(
@@ -111,14 +76,7 @@ class KnowledgeBase:
               + ("" if self._has_text_index else "  [no paragraphs_fts: text search off]"))
 
     def get_paragraphs_by_url(self, wiki_url: str) -> list[str]:
-        """Return the non-empty section texts for a Wikipedia URL, in order.
-
-        Boilerplate is deliberately not filtered. References, External links and
-        See also are 29.9% of every pool and look like obvious noise, but taking
-        them out at query time changed nothing (0.452 against 0.455) and cost
-        60% more time per example: the cross-encoder already discards them, and
-        reading a section title for every article does not come free.
-        """
+        """Return the non-empty section texts for a Wikipedia URL, in order."""
         rows = self._conn().execute(
             "SELECT text FROM paragraphs WHERE url = ? ORDER BY section_idx",
             (wiki_url,),
@@ -157,16 +115,7 @@ class KnowledgeBase:
 
     def search_articles_by_text(self, query: str, limit: int = 20,
                                 candidates: int = 200) -> list[dict]:
-        """Articles whose paragraph text best matches ``query`` (BM25 over FTS5).
-
-        The third way into the KB, and the only one that does not depend on the
-        model: `lookup_articles` needs it to name the entity and the image index
-        needs the entity to have a photograph, while here the question is the
-        query. Paragraph hits are folded up to their article, best hit first.
-
-        Needs the index built by ``build_kb_sqlite.py --paragraphs-fts``;
-        returns nothing when it is absent.
-        """
+        """Articles whose paragraph text best matches ``query`` (BM25 over FTS5)."""
         if not self._has_text_index:
             return []
         conn = self._conn()
@@ -205,24 +154,7 @@ class KnowledgeBase:
         ).fetchall()
 
     def _select_terms(self, conn, query: str) -> list[str]:
-        """The rarest content words of the query — what makes the search work.
-
-        FTS5 scores every row in the union of the terms' posting lists, so one
-        common word costs more than the rest of the query put together. Two
-        filters: drop the question words, which carry no content and sit in
-        millions of paragraphs ("this" in 2.46M, "where" in 1.08M against 50k
-        for "indies"), then keep the rarest of what is left.
-
-        Rarest, not longest. Length looks like a free proxy and is a bad one: it
-        keeps `populations` (608k paragraphs) over `plant` (291k) and `northern`
-        (369k) over `breeds` (56k) — long common words in, short rare ones out,
-        which is backwards. Measured, it costs 3 points of recall@20 (26.7%
-        against 30.0%). Six terms are worse than four: past the rarest few, the
-        extra words only add noise.
-
-        Document frequencies are cached per process because a run shares
-        vocabulary heavily across questions.
-        """
+        """The rarest content words of the query — what makes the search work."""
         tokens = {t for t in normalize(query).split()
                   if len(t) > 2 and t not in _STOP and t not in _QUESTION_WORDS}
         for t in tokens - _DF_CACHE.keys():

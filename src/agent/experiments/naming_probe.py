@@ -1,22 +1,3 @@
-"""Can the model name the entity in the image, and does cropping help?
-
-The name is the key to the only channel with real headroom: 84.2% of the gold
-titles are resolvable by name, against 40.6% recall@20 for the image index. But
-Qwen3-VL-8B produces a name that resolves to the right article only 11.6% of the
-time, so that ceiling is out of reach.
-
-Looking at where it fails, the model is not confusing the subject with the
-background — it answers `Gila monster` for a `Tiliqua rugosa`, `Schloss
-Nordkirchen` for a `Grasten Palace`. Right kind of thing, wrong instance. So a
-crop cannot help by removing background; it can only help by *magnifying*, since
-telling those apart depends on details a downsampled image no longer carries.
-
-That is what the variants test, and why each crop is scaled back to the original
-size: the VLM allocates tokens by pixel dimensions, so a crop fed as-is would be
-seen at *fewer* tokens rather than higher magnification, testing the opposite of
-the hypothesis. `--no-upscale` runs it the naive way, to show the difference.
-"""
-
 import argparse
 import base64
 import io
@@ -112,7 +93,7 @@ def norm_url(url):
 
 
 def main():
-    p = argparse.ArgumentParser(description=__doc__)
+    p = argparse.ArgumentParser(description="Resolve VLM-proposed entity names against the KB.")
     p.add_argument("--model-name", default="Qwen/Qwen3-VL-8B-Instruct")
     p.add_argument("--base-url", default="http://localhost:8000/v1")
     p.add_argument("--output", default="outputs/agentic/naming_probe.jsonl")

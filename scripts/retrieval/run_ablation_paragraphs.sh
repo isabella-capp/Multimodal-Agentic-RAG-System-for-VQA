@@ -11,44 +11,13 @@
 #SBATCH --output=/homes/%u/cvcs2026/logs/recall_ablation_%j.out
 #SBATCH --error=/homes/%u/cvcs2026/logs/recall_ablation_%j.err
 #SBATCH --account=cvcs2026
-#
-# Full paragraph-level retrieval ablation study.
-#
-# Evaluates 17 configurations in a SINGLE job so that the expensive model
-# loading (EVA-CLIP, FAISS, BGE cross-encoder) happens only once.
-#
-# Configurations
-# ==============
-#   A. BM25 only:        bm25_top5 / top10 / top20 / top50
-#   B. BGE only:         bge_top5  / top10 / top20
-#   C. BM25 → BGE:       bm25_20_bge_5/10/20 | bm25_50_bge_5/10/20
-#   D. BM25 + BGE (RRF): rrf_top5  / top10 / top20
-#
-# For C modes, the script also records the intermediate BM25 rank so we
-# can distinguish "BM25 failed" from "BGE re-ordered away" in the report.
-#
-# Usage
-# =====
-#   # Full ablation (all 17 modes, 1000 examples):
-#   sbatch scripts/retrieval/run_ablation_paragraphs.sh
-#
-#   # Smoke test (50 examples for a quick sanity check):
-#   SMOKE=1 sbatch scripts/retrieval/run_ablation_paragraphs.sh
-#
-#   # Custom subset:
-#   MODES="bm25_top20 rrf_top5 rrf_top10 rrf_top20" sbatch ...
-#
-#   # Re-print table from existing output (no GPU needed):
-#   REPORT_ONLY=1 sbatch --partition=all_usr_prod --gres="" ...
 
 set -euo pipefail
 
-# ── Configuration ─────────────────────────────────────────────────────────────
 TOP_K="${TOP_K:-20}"            # EVA-CLIP FAISS neighbours
 RRF_K="${RRF_K:-60}"           # RRF smoothing constant
 CROSS_ENCODER="${CROSS_ENCODER_MODEL:-BAAI/bge-reranker-base}"
 
-# Default: all 17 new-style modes in one pass
 MODES="${MODES:-bm25_top5 bm25_top10 bm25_top20 bm25_top50 \
                bge_top5 bge_top10 bge_top20 \
                bm25_20_bge_5 bm25_20_bge_10 bm25_20_bge_20 \
@@ -95,7 +64,6 @@ echo "  output                 : $OUTPUT"
 echo "  modes                  : $MODES"
 echo "================================================================"
 
-# shellcheck disable=SC2086
 uv run python "$CODE_DIR"/src/retrieval/experiments/compute_recall_paragraphs.py \
     --top-k "$TOP_K" \
     --rrf-k "$RRF_K" \
@@ -109,10 +77,8 @@ echo "================================================================"
 echo "Done. Results in $OUTPUT"
 echo "================================================================"
 
-# Convenience: re-print a clean per-type breakdown
 echo ""
 echo "--- BM25 only ---"
-# shellcheck disable=SC2086
 uv run python "$CODE_DIR"/src/retrieval/experiments/compute_recall_paragraphs.py \
     --report-only --output "$OUTPUT" \
     --modes bm25_top5 bm25_top10 bm25_top20 bm25_top50 2>/dev/null || true
@@ -123,7 +89,6 @@ uv run python "$CODE_DIR"/src/retrieval/experiments/compute_recall_paragraphs.py
     --modes bge_top5 bge_top10 bge_top20 2>/dev/null || true
 
 echo "--- BM25 -> BGE ---"
-# shellcheck disable=SC2086
 uv run python "$CODE_DIR"/src/retrieval/experiments/compute_recall_paragraphs.py \
     --report-only --output "$OUTPUT" \
     --modes bm25_20_bge_5 bm25_20_bge_10 bm25_20_bge_20 \

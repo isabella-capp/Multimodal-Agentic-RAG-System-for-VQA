@@ -42,9 +42,6 @@ def main():
     def nu(u):
         return (u or "").rstrip("/").lower().replace("http://", "https://")
 
-    # Only examples where the answer is actually reachable: the right article is in
-    # the pool AND some paragraph states the answer. Anywhere else the reranker
-    # cannot be the thing at fault, so including them would just dilute the signal.
     random.seed(0)
     cases = []
     for uid, d in dump.items():
@@ -87,7 +84,6 @@ def main():
         for n in TOP_NS:
             print(f"    answer paragraph in top-{n:<3}: {hits[n]/len(cases):6.1%}")
         del rr
-
 
 if __name__ == "__main__":
     main()

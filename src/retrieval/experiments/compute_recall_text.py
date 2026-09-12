@@ -1,15 +1,3 @@
-"""Recall of the text channel, and what it adds to the image index.
-
-The two channels we had both go through the model: the image index only ranks
-articles that carry a photograph (40.6% recall@20) and the name lookup needs the
-model to name the subject, which Qwen3-VL-8B does 11.6% of the time. This one is
-queried with the question itself, so it depends on neither.
-
-What matters is not its recall but its OVERLAP: a channel that finds the same
-articles the image already found adds nothing, however good it looks alone.
-Needs the index from ``build_kb_sqlite.py --paragraphs-fts``.
-"""
-
 import argparse
 import json
 import os
@@ -31,7 +19,7 @@ def norm(u):
 
 
 def main():
-    p = argparse.ArgumentParser(description=__doc__)
+    p = argparse.ArgumentParser(description="Recall of the full-text channel.")
     p.add_argument("--image-recall", default="outputs/retrieval/retrieval_topk100.jsonl")
     p.add_argument("--output", default="outputs/retrieval/recall_text.jsonl")
     p.add_argument("--limit", type=int, default=1000)

@@ -13,28 +13,7 @@ def _tokenize(text: str) -> list[str]:
 
 
 class BM25Ranker:
-    """DEPRECATED. Lexical candidate filter using BM25Okapi (rank_bm25).
-
-    Built on demand over the paragraphs supplied to each call — no persistent
-    index. Intended as the first stage before BGE cross-encoder reranking: BM25
-    cheaply prunes the pool from O(working-set) to a manageable top-M before the
-    expensive model pass.
-
-    Measured, it does not pay. At matched top_n=20 the cross-encoder alone
-    scores 0.380 and fusing it with this by RRF 0.374; as a pre-filter it gives
-    0.366 against 0.369 without, and top_m 50 against 20 changes nothing
-    (0.366/0.367). Every difference sits inside the ~0.3 point run-to-run noise.
-
-    The reason is visible in the construction: an index built over the ~120
-    paragraphs of one call has no usable IDF, and IDF is the whole point of
-    BM25 — with 120 documents there is no telling a rare term from a common one.
-    Lexical retrieval that does work is ``KnowledgeBase.search_articles_by_text``,
-    where BM25 runs over all 14.1M paragraphs and adds 12.3 points of article
-    coverage.
-
-    Kept so the `bm25`, `bm25_bge` and `rrf` strategies still run; do not build
-    on it.
-    """
+    """DEPRECATED. Lexical candidate filter using BM25Okapi (rank_bm25)."""
 
     def rank(
         self,
@@ -43,13 +22,7 @@ class BM25Ranker:
         top_m: int,
         force_sort: bool = False,
     ) -> list[str]:
-        """Return up to *top_m* paragraphs ranked by BM25 score.
-
-        If the pool is already small enough (≤ top_m) the paragraphs are
-        returned as-is so the caller never loses coverage, unless
-        *force_sort* is True, in which case the full pool is always sorted
-        (required e.g. for RRF which needs the complete BM25 ordering).
-        """
+        """Return up to *top_m* paragraphs ranked by BM25 score."""
         if not paragraphs:
             return []
         if len(paragraphs) <= top_m and not force_sort:

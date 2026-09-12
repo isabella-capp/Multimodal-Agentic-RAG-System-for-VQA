@@ -1,11 +1,3 @@
-"""Precompute how many paragraphs contain each word of the test questions.
-
-The full-text channel picks the rarest terms of a query, which needs a document
-frequency per term. Measuring one costs a scan of that term's posting list over
-14.1M rows — cheap warm, slow cold, and every job pays it again from scratch.
-This fills the cache once, on CPU, so the GPU runs start warm.
-"""
-
 import argparse
 import os
 import sys
@@ -21,7 +13,7 @@ from vlm.dataset import load_dataset
 
 
 def main():
-    p = argparse.ArgumentParser(description=__doc__)
+    p = argparse.ArgumentParser(description="Precompute document frequencies for BM25.")
     p.add_argument("--output", default=paths.TERM_DF_PATH)
     args = p.parse_args()
 

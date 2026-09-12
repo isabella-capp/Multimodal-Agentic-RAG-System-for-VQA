@@ -67,9 +67,6 @@ def parse_args():
                    help="Run a second search only where the best pooled paragraph "
                         "scores below this. Evidence-driven iteration: the model's "
                         "own sense of whether it has enough has failed every test.")
-    # One strategy name per ranking operation, from the same vocabulary as
-    # fusion.STRATEGIES. Defaults are the best measured value for each; see
-    # Ranking for the numbers and for which of them nobody has measured yet.
     p.add_argument("--tool-set", default="minimal", choices=["minimal", "legacy"],
                    help="Ablation: 'minimal' is the two tools every current "
                         "run uses; 'legacy' is the four-tool interface, so the "
@@ -155,6 +152,7 @@ def format_trace(messages) -> str:
             lines += [f"[TOOL RESULT] ({m.name})", text(m.content).strip(), ""]
     return "\n".join(lines + ["=" * 78])
 
+
 def print_debug_example(item, run):
     steps = " | ".join(f"{s.order}:{s.tool}{s.arguments}" for s in run.steps) or "<no tool>"
     tqdm.write("\n" + "=" * 70)
@@ -177,7 +175,6 @@ def main():
     def predict(item):
         run = agent.run(item["image_path"], item["question"])
 
-        # Protezione lock per aggiornamenti e log concorrenti
         with log_lock:
             runs.append(run)
 
@@ -211,7 +208,6 @@ def main():
         top_k=args.top_k,
         rerank_top_n=args.rerank_top_n,
 
-
         text_gate=args.text_gate,
         final_pass=args.final_pass,
         legacy_prompt=args.legacy_prompt,
@@ -237,7 +233,6 @@ def main():
 
     print(f"Metrics: {json.dumps(metrics)}")
     print(f"Predictions: {args.output} | Metrics: {metrics_path}")
-
 
 if __name__ == "__main__":
     main()

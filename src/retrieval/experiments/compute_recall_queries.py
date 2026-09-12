@@ -1,13 +1,3 @@
-"""Recall@k of retrieval by different QUERY SOURCES (no VLM/vLLM).
-
-The raw anonymised question ("this plant") is a useless retrieval key. Here we
-compare, per example, text-only and image+text-fused retrieval using several
-query sources — the question, the non-anonymised question_original, and the GT
-wikipedia_title (the ideal entity name = ceiling for any VLM-generated
-description-as-query). Image-only is the reference. Stores only the GT hit rank
-per config (tiny output); prints a recall@k table at the end.
-"""
-
 import argparse
 import json
 import os

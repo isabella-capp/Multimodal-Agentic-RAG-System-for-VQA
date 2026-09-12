@@ -1,24 +1,3 @@
-"""Build the SQLite KB from the 15 GB encyclopedic_kb_wiki.json.
-
-The source is a dict ``{url: {section_texts, section_titles, title,
-image_urls, ...}}`` with ~2M articles, streamed with ijson (constant memory)
-into two tables: ``articles`` (metadata) and ``paragraphs`` (one row per
-non-empty section text, linked by url). The text lives only in ``paragraphs``.
-
-A final pass adds the name-lookup tables (``aliases`` + ``titles_fts``) that
-``KnowledgeBase.lookup_articles`` queries, so one run produces a KB the agent
-can use as-is. Use ``--index-only`` to rebuild just those on an existing KB.
-
-``--paragraphs-fts`` adds ``paragraphs_fts``, a full-text index over paragraph
-*text*, so a question can find an article without anyone naming it. It writes
-into the KB itself: one file stays the single source of truth for retrieval.
-
-Run it when nothing else is reading the KB. It takes a write lock on an 18.6 GB
-file the whole group reads, and readers must not have it open with
-``immutable=1`` — that flag promises SQLite the bytes never change, which stops
-being true here. ``KnowledgeBase`` therefore opens read-only *without* it.
-"""
-
 import argparse
 import json
 import os
@@ -75,11 +54,7 @@ CREATE VIRTUAL TABLE titles_fts USING fts5(tokens, url UNINDEXED, tokenize='unic
 
 
 def build_name_index(conn):
-    """Add the name → article lookup tables over the existing ``articles``.
-
-    Normalisation must match ``KnowledgeBase`` exactly, hence the shared helpers:
-    a mismatch between build time and query time fails silently.
-    """
+    """Add the name → article lookup tables over the existing ``articles``."""
     print("Reading articles for the name index …")
     articles = conn.execute("SELECT url, title FROM articles").fetchall()
     conn.executescript(NAME_INDEX_SCHEMA)
@@ -108,20 +83,7 @@ def build_name_index(conn):
 
 
 def build_paragraph_fts(db_path, overwrite):
-    """Index the text of every paragraph, in the KB, next to the other indexes.
-
-    The two channels we had both run through the model: the image index needs
-    the entity to have a photograph (40.6% recall@20) and the name lookup needs
-    the model to name it, which Qwen3-VL-8B manages 11.6% of the time. This one
-    does not — the question itself is the query.
-
-    ``content=''`` keeps the table contentless, so the text is not stored a
-    second time and only the inverted index is added. Rows are keyed by
-    ``paragraphs.id``, so a hit joins straight back to its article.
-
-    Pragmas are the safe ones on purpose: a crash during this must leave the
-    18.6 GB KB exactly as it was, which is worth more than a faster build.
-    """
+    """Index the text of every paragraph, in the KB, next to the other indexes."""
     conn = sqlite3.connect(db_path)
     conn.execute("PRAGMA synchronous=NORMAL")
     conn.execute("PRAGMA temp_store=MEMORY")

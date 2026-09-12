@@ -7,6 +7,7 @@ from langchain_core.messages import AIMessage, ToolMessage
 
 from prompts import extract_answer
 
+
 @dataclass
 class AgentStep:
     """One tool call in the agent loop, paired with what came back."""
@@ -57,9 +58,8 @@ class AgentRun:
 
     @classmethod
     def from_messages(cls, messages: list) -> "AgentRun":
-        """Pair each tool call with its observation, and take the last non-tool
-        assistant message as the prediction."""
-        
+        """Pair each tool call with its observation, and take the last non-tool"""
+
         calls = {tc["id"]: (tc["name"], tc.get("args", {}))
                  for m in messages if isinstance(m, AIMessage)
                  for tc in m.tool_calls or []}
@@ -74,23 +74,22 @@ class AgentRun:
         prediction = None
         for m in reversed(messages):
             if isinstance(m, AIMessage) and not m.tool_calls:
-                # 1. Estrazione del contenuto grezzo
                 raw_content = ""
                 if isinstance(m.content, str):
                     raw_content = m.content
                 elif isinstance(m.content, list):
                     raw_content = " ".join(
-                        block.get("text", "") if isinstance(block, dict) else str(block) 
+                        block.get("text", "") if isinstance(block, dict) else str(block)
                         for block in m.content
                     )
                 else:
                     raw_content = str(m.content)
-                
+
                 prediction = extract_answer(raw_content)
 
                 if prediction is not None:
                     prediction = str(prediction).strip()
-                    
+
                 break
 
         return cls(prediction=prediction, steps=steps)

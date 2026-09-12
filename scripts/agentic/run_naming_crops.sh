@@ -11,32 +11,6 @@
 #SBATCH --output=logs/naming_crops_%j.out
 #SBATCH --error=logs/naming_crops_%j.err
 #SBATCH --account=cvcs2026
-#
-# How well can the model name what it sees, and does asking for more than one
-# guess help? One guess resolves to the right article 11.6% of the time and its
-# wrong guess is usually the right kind of thing (`Gila monster` for a `Tiliqua
-# rugosa`), so the right name is often the second or third candidate. Three
-# guesses reach 17.1%; GUESSES sweeps the number.
-#
-# It also sweeps crops of the query image, which do not help: the rate falls
-# monotonically from 11.7% on the whole image to 8.2% at a 40% centre crop.
-#
-#   scripts/submit.sh scripts/agentic/run_naming_crops.sh
-#   VARIANTS=full,center80,center60,center40 scripts/submit.sh …
-#   BOXES=outputs/retrieval/boxes.jsonl VARIANTS=full,box scripts/submit.sh …
-#
-# Naming is the gate on the only channel with headroom — 84.2% of gold titles
-# are reachable by name against 40.6% recall@20 by image — and Qwen3-VL-8B
-# reaches it 11.6% of the time.
-#
-# It is not looking at the background: it answers `Gila monster` for a `Tiliqua
-# rugosa` and `Burg Hohenölsen` for an `Uzhhorod Castle`, so the subject is
-# found and the instance is wrong. A crop can then only pay by magnifying, and
-# the probe rescales every crop back to the original size so the token budget
-# stays fixed and the magnification is what changes. UPSCALE=0 runs it without
-# that, which should be flat or worse if the hypothesis holds.
-#
-# No retrieval and no answer generation: 32 output tokens per image.
 
 set -euo pipefail
 

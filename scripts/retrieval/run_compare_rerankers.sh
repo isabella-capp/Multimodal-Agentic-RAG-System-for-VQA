@@ -11,15 +11,6 @@
 #SBATCH --output=logs/rerankers_%j.out
 #SBATCH --error=logs/rerankers_%j.err
 #SBATCH --account=cvcs2026
-#
-# Is the cross-encoder the bottleneck? Measured without any generation: on the
-# examples where the right article IS pooled and some paragraph DOES state the
-# answer, how often does the reranker put that paragraph in the top-n?
-#
-# If the answer is ~90% the reranker is fine and a bigger one buys nothing; B's
-# 0.528 accuracy on pool-hit would then be the reader's limit, not retrieval's.
-#
-#   scripts/submit.sh scripts/retrieval/run_compare_rerankers.sh
 
 set -euo pipefail
 

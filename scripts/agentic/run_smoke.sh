@@ -12,18 +12,6 @@
 #SBATCH --error=logs/smoke_%j.err
 #SBATCH --account=cvcs2026
 
-# Cheap check that the remote models work with our agent before committing to the
-# long runs: a handful of examples each, full traces in the log. This is how we
-# found that no OpenRouter provider serves Qwen2.5-VL-72B with tool use (404).
-#
-#   export LLM_API_KEY=sk-or-v1-...
-#   sbatch --export=ALL scripts/run_smoke.sh
-#
-# A verdict per model is printed at the end:
-#   "No endpoints found that support tool use" → unusable here, pick another
-#   a rejected tool_choice                     → add --no-force-first-tool for it
-#   0 errors and tool_called_pct 100           → good to go
-
 set -euo pipefail
 
 MODELS=(

@@ -1,11 +1,3 @@
-"""Retrieval-only pass: for each test image, save the top-k candidate articles.
-
-No VLM, no knowledge base — just EVA-CLIP image encoding + FAISS search. The
-output lets us compute recall@k for any k <= --top-k offline (a retrieved
-article counts as a hit if it equals the example's ground-truth wikipedia_url).
-Resumable: already-processed unique_ids are skipped.
-"""
-
 import argparse
 import json
 import os

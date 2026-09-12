@@ -10,15 +10,6 @@
 #SBATCH --error=logs/naming_%j.err
 #SBATCH --account=cvcs2026
 
-# How often can the model name the entity in the image well enough to resolve the
-# right Wikipedia article? That rate is the recall ceiling of `lookup_article`,
-# the only channel that can beat the ~47% of the image embedding.
-#
-# No GPU and no vLLM: the model is remote (OpenRouter) and only the KB is
-# opened locally. Submit with the key exported:
-#   export LLM_API_KEY=sk-or-v1-...
-#   sbatch --export=ALL scripts/run_naming_probe.sh
-
 set -euo pipefail
 
 MODEL="google/gemini-2.5-flash"

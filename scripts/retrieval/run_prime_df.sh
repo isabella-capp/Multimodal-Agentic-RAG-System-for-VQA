@@ -9,14 +9,6 @@
 #SBATCH --output=logs/prime_df_%j.out
 #SBATCH --error=logs/prime_df_%j.err
 #SBATCH --account=cvcs2026
-#
-# Fill the term-frequency cache the full-text channel needs, once, on CPU.
-#
-#   scripts/submit.sh scripts/retrieval/run_prime_df.sh
-#
-# Without it every GPU job re-measures each word from cold: the recall probe
-# spent an hour on the cluster against six minutes locally, all of it in first
-# touches of ~4k terms. The counts only change when the KB is rebuilt.
 
 set -euo pipefail
 PROJECT_DIR="${SLURM_SUBMIT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"

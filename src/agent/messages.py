@@ -19,11 +19,11 @@ def build_user_message(image_path, question) -> HumanMessage:
     return HumanMessage(
         content=[
             {
-                "type": "text", 
+                "type": "text",
                 "text": question
             },
             {
-                "type": "image_url", 
+                "type": "image_url",
                 "image_url": {"url": image_to_data_uri(image_path)}
             },
         ]

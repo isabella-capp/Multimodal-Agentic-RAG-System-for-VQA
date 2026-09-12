@@ -1,11 +1,3 @@
-"""Recall@k of query-conditioned (fused image+text) retrieval.
-
-For each test example we encode the image and the question once, then fuse them
-at several alpha weights (1.0 = image only, 0.0 = text only) and search the FAISS
-index. A hit = the ground-truth wikipedia_url is in the top-k. No VLM/vLLM — just
-EVA-CLIP + FAISS. Resumable; prints a recall@k table per alpha at the end.
-"""
-
 import argparse
 import json
 import os

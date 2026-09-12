@@ -1,15 +1,3 @@
-"""Confidence intervals for a run, and paired tests between runs.
-
-A summary number on 1000 examples carries a sampling error of about +/-3 points
-at 95%, which is ten times the +/-0.3 we see between two identical runs. Most of
-our decisions turned on 1-3 point gaps, so they need the paired test: the two
-systems answer the SAME examples, and the interval on their difference is far
-tighter than the interval on either score.
-
-Needs the per-example scores written by ``evqa_eval/score_evqa.py`` next to each
-results file (``*.scores.jsonl``).
-"""
-
 import argparse
 import json
 import random
@@ -30,7 +18,7 @@ def boot(values, n=5000, seed=0):
 
 
 def main():
-    p = argparse.ArgumentParser(description=__doc__)
+    p = argparse.ArgumentParser(description="Confidence intervals and paired tests between runs.")
     p.add_argument("scores", nargs="+", help="*.scores.jsonl files, first is the reference")
     p.add_argument("--bootstrap", type=int, default=5000)
     args = p.parse_args()

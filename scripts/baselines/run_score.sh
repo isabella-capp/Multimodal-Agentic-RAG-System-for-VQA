@@ -9,13 +9,6 @@
 #SBATCH --output=logs/score_%j.out
 #SBATCH --error=logs/score_%j.err
 #SBATCH --account=cvcs2026
-#
-# Score prediction files that never reached the scoring step — a job killed by
-# the walltime leaves the .jsonl complete and the results missing.
-#
-#   PREDS="a.jsonl b.jsonl" scripts/submit.sh scripts/baselines/run_score.sh
-#
-# CPU: BEM is a TensorFlow model and does not need the GPU queue for 1000 rows.
 
 set -euo pipefail
 PROJECT_DIR="${SLURM_SUBMIT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"

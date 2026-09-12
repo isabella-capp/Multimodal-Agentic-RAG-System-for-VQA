@@ -10,11 +10,7 @@ from PIL import Image
 
 
 class Retriever:
-    """Visual retriever based on EVA-CLIP + FAISS.
-
-    Encodes a user image into an embedding, searches a FAISS index for the
-    top-k most similar images, and returns the associated Wikipedia metadata.
-    """
+    """Visual retriever based on EVA-CLIP + FAISS."""
 
     def __init__(
         self,
@@ -24,20 +20,7 @@ class Retriever:
         device: str | None = None,
         ef_search: int | None = None,
     ):
-        """
-        Parameters
-        ----------
-        img_index_path : str
-            Path to the FAISS index file (e.g. ``knn.index``).
-        img_index_json_path : str
-            Path to the JSON file that maps FAISS indices to
-            ``[wiki_url, title, image_path]`` triples.
-        top_k : int
-            Number of nearest neighbours to retrieve.
-        device : str | None
-            Torch device string.  Defaults to ``"cpu"`` to avoid VRAM
-            conflicts when a VLM is already loaded on GPU.
-        """
+        """Parameters"""
         self.top_k = top_k
         self.device = torch.device(device if device else "cpu")
         self.ef_search = ef_search
@@ -45,7 +28,6 @@ class Retriever:
         self._img_index_path = img_index_path
         self._img_index_json_path = img_index_json_path
 
-        # Lazy-loaded resources
         self._lock = threading.Lock()
         self.img_index = None
         self.img_values = None
@@ -53,11 +35,7 @@ class Retriever:
         self.embedding_model = None
 
     def _ensure_index(self):
-        """Load the FAISS index and its JSON mapping (once).
-
-        Locked: check-then-set under a thread pool let every worker pass the
-        guard before any of them assigned, loading one copy per thread.
-        """
+        """Load the FAISS index and its JSON mapping (once)."""
         with self._lock:
             if self.img_index is not None:
                 return
@@ -112,10 +90,7 @@ class Retriever:
             print(f"EVA-CLIP model loaded on {self.device} ({self._model_dtype}).")
 
     def encode_image(self, image: Image.Image) -> np.ndarray:
-        """Encode an image into a normalised embedding vector.
-
-        Returns a ``(1, D)`` float32 numpy array.
-        """
+        """Encode an image into a normalised embedding vector."""
         self._ensure_model()
 
         image_tensor = self.processor(image, return_tensors="pt").pixel_values.to(
@@ -149,20 +124,11 @@ class Retriever:
         return text_features.cpu().numpy().astype(np.float32)
 
     def retrieve(self, image: Image.Image, question: str | None = None) -> list[dict]:
-        """Articles whose reference images are nearest to ``image``.
-
-        ``question`` is unused: the CLIP text tower is misaligned with this index
-        (0% recall@50 even given the ground-truth title), so text cannot condition
-        the search. Kept because callers pass it.
-        """
+        """Articles whose reference images are nearest to ``image``."""
         return self.search_index(self.encode_image(image), self.top_k)
 
     def search_index(self, embedding: np.ndarray, top_k: int = 10) -> list[dict]:
-        """Search FAISS with a normalised ``(1, D)`` embedding.
-
-        Returns articles deduplicated by ``wiki_url``, each with ``wiki_url``,
-        ``title``, ``image_path`` and ``score``.
-        """
+        """Search FAISS with a normalised ``(1, D)`` embedding."""
         self._ensure_index()
         distances, indices = self.img_index.search(embedding, k=top_k)
 

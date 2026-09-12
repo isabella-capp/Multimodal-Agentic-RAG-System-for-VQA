@@ -12,8 +12,6 @@
 #SBATCH --error=/homes/%u/cvcs2026/logs/recall_fusion_%j.err
 #SBATCH --account=cvcs2026
 
-# Recall@k of fused image+text retrieval (EVA-CLIP + FAISS; no vLLM).
-
 set -euo pipefail
 PROJECT_DIR="/homes/$USER/cvcs2026"
 export HF_HOME="/work/cvcs2026/recursive_retrievers/hf_cache/huggingface"

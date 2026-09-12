@@ -12,13 +12,6 @@
 #SBATCH --error=logs/ablation_%j.err
 #SBATCH --account=cvcs2026
 
-# Re-tune B's top-k / top-n for the current model, on the VALIDATION split.
-# The 20/20 optimum was found with Qwen2.5-VL-3B and a 32k context; Qwen3-VL-8B
-# has a far larger window and finds the needle better, so the optimum may have
-# moved up — which is the point of widening the grid rather than confirming it.
-#
-#   scripts/submit.sh scripts/baselines/run_ablation_cross.sh
-
 set -euo pipefail
 
 MODEL="Qwen/Qwen3-VL-8B-Instruct"

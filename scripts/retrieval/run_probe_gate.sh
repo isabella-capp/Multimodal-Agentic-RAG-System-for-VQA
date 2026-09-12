@@ -11,11 +11,6 @@
 #SBATCH --output=logs/probe_gate_%j.out
 #SBATCH --error=logs/probe_gate_%j.err
 #SBATCH --account=cvcs2026
-#
-# Is the cross-encoder's best score a usable trigger for a second retrieval
-# round? Retriever and reranker only — no vLLM, so it starts in a minute.
-#
-#   scripts/submit.sh scripts/retrieval/run_probe_gate.sh
 
 set -euo pipefail
 PROJECT_DIR="${SLURM_SUBMIT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"

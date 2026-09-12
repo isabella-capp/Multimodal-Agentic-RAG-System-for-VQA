@@ -2,9 +2,6 @@ from prompts import ANSWER_FORMAT
 
 from prompts import ANSWER_FORMAT
 
-# Ablation only: the prompt for the four-tool interface, kept so the tool
-# surface can be varied as one variable. UNIFIED_PROMPT below is what every
-# current run uses.
 SYSTEM_PROMPT = f"""\
 You are a multimodal question-answering assistant. You are given an image and a \
 question about the entity shown in it, plus tools that retrieve Wikipedia evidence.
@@ -53,12 +50,7 @@ different words, not the same ones rephrased.
 
 {ANSWER_FORMAT}"""
 
-
-# The name is a retrieval key, so what matters is only whether ONE of the guesses
-# resolves to the right article. Three reach 17.5% against 11.8% for one, and the
-# wording of the ask is worth as much as the number: these are the variants.
 MULTI_NAMING_PROMPTS = {
-    # the original: asks for variety explicitly
     "diverse": """\
 You are shown an image. Give your {n} best guesses at what the single main \
 entity in it is — the species, landmark, building, artwork or event — using the \
@@ -69,8 +61,6 @@ numbering, no explanation, no punctuation at the end. Make them genuinely \
 different candidates, not spellings of the same one. If you are unsure, guess \
 anyway.""",
 
-    # same, minus the variety constraint: asking for difference may push the
-    # model off its own second and third best rather than towards them
     "plain": """\
 You are shown an image. Give your {n} best guesses at what the single main \
 entity in it is — the species, landmark, building, artwork or event — using the \
@@ -78,8 +68,6 @@ names their English Wikipedia articles would have.
 
 One per line, most likely first, nothing else.""",
 
-    # names the failure mode we measured: the model gets the kind of thing right
-    # and the instance wrong, so the alternatives worth having are the near ones
     "siblings": """\
 You are shown an image. Identify what kind of thing it is, then give the {n} \
 most likely specific identities, using the names their English Wikipedia \
@@ -91,14 +79,7 @@ other monument of that style — not restatements of one answer.
 
 One per line, most likely first, nothing else.""",
 
-    # shows the pattern instead of describing it: scientific name, common name,
-    # sibling species. The abstract version of the same ask ("genuinely
-    # different candidates") reaches 17.5%.
-    #
-    # The example names are checked against the test set: they appear in no gold
-    # title, no gold answer and no question. An earlier version used `Tiliqua
-    # rugosa`, which is a gold title here — worth at most 0.1 points, and still
-    # a prompt carrying an answer it is being tested on.
+    # Example names verified absent from the test set's titles, answers and questions.
     "example": """\
 You are shown an image. Name the main subject — the species, landmark, building, \
 artwork, or event — using the name its English Wikipedia article would have.
@@ -111,8 +92,6 @@ Example output:
   Leopard
   Panthera onca""",
 
-    # a scientific and a common name are different article titles, and either
-    # may be the one the KB holds
     "registers": """\
 You are shown an image. Give {n} names for the single main entity in it, as \
 their English Wikipedia articles would title them.
@@ -120,8 +99,6 @@ their English Wikipedia articles would title them.
 Cover different registers: the scientific or official name, the common name, \
 and the next most likely candidate. One per line, nothing else.""",
 }
-
-
 
 NAMING_PROMPT = """\
 You are shown an image. Name the single main entity in it as precisely as you can \
@@ -131,11 +108,6 @@ Wikipedia article would have.
 Reply with ONLY that name. No article, no description, no explanation, no \
 punctuation. If you are unsure, still give your best guess."""
 
-
-# Used with --preview: search_by_image returns passages, not a list of titles,
-# so the agent writes its keywords after reading text rather than after reading
-# names. Whether a second search happens is not left to it — the cross-encoder's
-# score on those passages decides, the way it does in the pipeline.
 PREVIEW_PROMPT = f"""\
 You are a multimodal question-answering assistant. You are given an image and a \
 question about the entity shown in it.

@@ -7,13 +7,7 @@ from agent.run import AgentRun
 
 
 def summarise(runs: list[AgentRun], wall_seconds: float) -> dict:
-    """Cost, latency and — the point of it — how the agent retrieved.
-
-    Which tool it enters with, how often each comes back empty, and which call
-    sequences it settles into. Accuracy alone hides why two runs differ: the 3B
-    calls a tool and then answers from the title without ever reading it, which
-    only the paragraph and sequence counts reveal.
-    """
+    """Cost, latency and — the point of it — how the agent retrieved."""
     if not runs:
         return {"examples": 0, "wall_seconds": round(wall_seconds, 1)}
 

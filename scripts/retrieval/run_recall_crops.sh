@@ -12,9 +12,6 @@
 #SBATCH --error=/homes/%u/cvcs2026/logs/recall_crops_%j.err
 #SBATCH --account=cvcs2026
 
-# Can query-side image tricks (efSearch sweep, center-crop, five-crop+RRF, AQE)
-# raise the retrieval pool ceiling above image-only? EVA-CLIP + FAISS; no vLLM.
-
 set -euo pipefail
 PROJECT_DIR="/homes/$USER/cvcs2026"
 export HF_HOME="/work/cvcs2026/recursive_retrievers/hf_cache/huggingface"

@@ -1,10 +1,3 @@
-"""Aggregate ablation study results into a summary table.
-
-Reads all per-config result JSON files from the ablation output directory
-and produces a ranked summary with overall and per-question-type accuracy.
-Supports both proxy (exact-match) and BEM result files.
-"""
-
 import argparse
 import glob
 import json
@@ -48,7 +41,6 @@ def main():
     files = sorted(glob.glob(pattern))
 
     if not files:
-        # Fallback to proxy scores if BEM not available
         pattern_proxy = os.path.join(args.results_dir, "results_cross_topK*_rerankN*.json")
         files = sorted(glob.glob(pattern_proxy))
         if files:
@@ -82,10 +74,8 @@ def main():
         results.append(entry)
         all_qtypes.update(entry["accuracy_by_type"].keys())
 
-    # Sort by overall accuracy (descending)
     results.sort(key=lambda x: x["accuracy_overall"], reverse=True)
 
-    # ── Print table ──────────────────────────────────────────────────────
     qtypes_sorted = sorted(all_qtypes)
     header_qtypes = "".join(f"{qt[:12]:>14s}" for qt in qtypes_sorted)
     header = f"{'Rank':>4s}  {'top_k':>5s}  {'rerank_n':>8s}  {'Overall':>8s}{header_qtypes}"
@@ -101,7 +91,6 @@ def main():
             f"  {entry['accuracy_overall']:>8.4f}{qtypes_str}"
         )
 
-    # ── Best config ──────────────────────────────────────────────────────
     best = results[0]
     print(f"\n★ Best configuration:")
     print(f"  top_k={best['top_k']}, rerank_top_n={best['rerank_top_n']}")
@@ -110,7 +99,6 @@ def main():
         acc = best["accuracy_by_type"].get(qt, 0.0)
         print(f"    {qt:20s}: {acc:.4f}")
 
-    # ── Pivot table (top_k rows × rerank_n columns) ─────────────────────
     pivot = defaultdict(dict)
     for entry in results:
         pivot[entry["top_k"]][entry["rerank_top_n"]] = entry["accuracy_overall"]
@@ -134,7 +122,6 @@ def main():
                 print(f"  {'—':>8s}", end="")
         print()
 
-    # ── Save summary ─────────────────────────────────────────────────────
     summary = {
         "best_config": {"top_k": best["top_k"], "rerank_top_n": best["rerank_top_n"]},
         "best_accuracy": best["accuracy_overall"],
@@ -146,7 +133,6 @@ def main():
     with open(args.output, "w", encoding="utf-8") as f:
         json.dump(summary, f, indent=2, ensure_ascii=False)
     print(f"\nSummary saved to {args.output}")
-
 
 if __name__ == "__main__":
     main()

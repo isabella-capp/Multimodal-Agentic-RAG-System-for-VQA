@@ -1,17 +1,3 @@
-"""All-in-one ablation study for cross-encoder reranking parameters.
-
-Loads all heavy models (Qwen VLM, EVA-CLIP retriever, cross-encoder reranker)
-**once**, then iterates over a grid of (top_k, rerank_top_n) configurations.
-For each configuration it runs inference on the validation set and saves both
-predictions and per-config results.
-
-Usage (SLURM):
-    See scripts/run_ablation_cross.sh
-
-Usage (interactive):
-    uv run python scripts/run_ablation_cross.py --val-json <path> [options]
-"""
-
 import argparse
 import itertools
 import json
@@ -19,7 +5,6 @@ import os
 import sys
 import time
 
-# Ensure src/ is on sys.path so we can import modules
 SRC_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 sys.path.insert(0, SRC_ROOT)
 
@@ -40,38 +25,30 @@ BASE_FOLDER = "/work/cvcs2026/encyclopedic"
 DATA_DIR = os.path.abspath(os.path.join(SRC_ROOT, "..", "data"))
 
 
-# ── CLI ──────────────────────────────────────────────────────────────────
-
 def parse_args():
     p = argparse.ArgumentParser(description="Ablation study: top-k × rerank-top-n (cross-encoder)")
 
-    # Paths
     p.add_argument("--val-json", default=f"{DATA_DIR}/encyclopedic_val_split.json",
                     help="Path to the validation split JSON.")
     p.add_argument("--base-folder", default=BASE_FOLDER)
     p.add_argument("--output-dir", default="outputs/ablation",
                     help="Directory for per-config prediction & result files.")
 
-    # Model
     p.add_argument("--model-name", default="Qwen/Qwen2.5-VL-3B-Instruct")
     p.add_argument("--base-url", default="http://localhost:8000/v1")
 
-    # Retriever
     p.add_argument("--img-index-path", default=f"{BASE_FOLDER}/knn.index")
     p.add_argument("--img-index-json-path", default=f"{BASE_FOLDER}/knn.json")
     p.add_argument("--kb-path", default=f"{BASE_FOLDER}/encyclopedic_kb_wiki.db")
     p.add_argument("--retriever-device", default="cuda")
 
-    # Cross-encoder
     p.add_argument("--cross-encoder-model", default="BAAI/bge-reranker-base")
 
-    # Grid (space-separated lists)
     p.add_argument("--top-k-values", type=int, nargs="+", default=[5, 10, 20, 50, 80],
                     help="List of top-k values to test.")
     p.add_argument("--rerank-top-n-values", type=int, nargs="+", default=[5, 10, 15, 20, 25, 30, 35],
                     help="List of rerank-top-n values to test.")
 
-    # Debug
     p.add_argument("--concurrency", type=int, default=8)
     p.add_argument("--debug-samples", type=int, default=1,
                     help="Print detailed trace for first N examples of each config.")
@@ -80,8 +57,6 @@ def parse_args():
 
     return p.parse_args()
 
-
-# ── Helpers ──────────────────────────────────────────────────────────────
 
 def _truncate(text: str, n: int = 200) -> str:
     text = " ".join(text.split())
@@ -92,12 +67,7 @@ def run_single_config(
     dataset, model, retriever, kb, reranker, top_k, rerank_top_n,
     output_path, debug_samples=1, concurrency=8,
 ):
-    """Run inference for a single (top_k, rerank_top_n) configuration.
-
-    The retriever's top_k is temporarily overridden.
-    Returns a list of prediction records.
-    """
-    # Override retriever top_k for this run
+    """Run inference for a single (top_k, rerank_top_n) configuration."""
     retriever.top_k = top_k
 
     records = []
@@ -165,18 +135,13 @@ def run_single_config(
 
 
 def compute_scores_simple(records):
-    """Compute accuracy using simple exact-match (case-insensitive substring).
-
-    This is a lightweight proxy for the full BEM evaluation.
-    The BEM scores are computed separately via score_evqa.py.
-    """
+    """Compute accuracy using simple exact-match (case-insensitive substring)."""
     scores_by_type = defaultdict(list)
 
     for rec in records:
         pred = (rec.get("prediction") or "").strip().lower()
         gt = rec.get("answer", "").strip().lower()
 
-        # Simple heuristic: prediction contains the answer or vice versa
         score = 1.0 if (gt in pred or pred in gt) and pred else 0.0
         scores_by_type[rec["question_type"]].append(score)
 
@@ -194,14 +159,11 @@ def compute_scores_simple(records):
     }
 
 
-# ── Main ─────────────────────────────────────────────────────────────────
-
 def main():
     args = parse_args()
 
     os.makedirs(args.output_dir, exist_ok=True)
 
-    # ── Load dataset ─────────────────────────────────────────────────────
     print(f"\n{'='*70}")
     print("Loading validation dataset …")
     dataset = load_dataset(args.val_json, args.base_folder)
@@ -215,14 +177,12 @@ def main():
     for qt in sorted(qtypes):
         print(f"  {qt:20s}: {qtypes[qt]}")
 
-    # ── Load models (ONCE) ───────────────────────────────────────────────
     print(f"\n{'='*70}")
     print("Loading Qwen VLM …")
     model = VLMClient(model_name=args.model_name, base_url=args.base_url)
 
     print(f"\n{'='*70}")
     print("Loading EVA-CLIP retriever …")
-    # Start with max top_k so FAISS is ready for all configurations
     max_top_k = max(args.top_k_values)
     retriever = Retriever(
         img_index_path=args.img_index_path,
@@ -230,7 +190,6 @@ def main():
         top_k=max_top_k,
         device=args.retriever_device,
     )
-    # Force eager loading
     retriever._ensure_index()
     retriever._ensure_model()
 
@@ -244,7 +203,6 @@ def main():
         args.cross_encoder_model, device=args.retriever_device
     )
 
-    # ── Grid search ──────────────────────────────────────────────────────
     grid = list(itertools.product(args.top_k_values, args.rerank_top_n_values))
     print(f"\n{'='*70}")
     print(f"Ablation grid: {len(grid)} configurations")
@@ -262,7 +220,6 @@ def main():
         print(f"\n{'─'*70}")
         print(f"[{i}/{len(grid)}] Config: {config_name}")
 
-        # Resume: skip configs already completed in a previous run.
         if os.path.exists(result_path):
             print(f"  [skip] already done → {result_path}")
             with open(result_path, encoding="utf-8") as f:
@@ -292,7 +249,6 @@ def main():
         elapsed = time.time() - t0
         print(f"  Inference done in {elapsed:.1f}s")
 
-        # Quick proxy scores (exact-match heuristic)
         scores = compute_scores_simple(records)
         scores["config"] = {"top_k": top_k, "rerank_top_n": rerank_n}
         scores["elapsed_seconds"] = round(elapsed, 1)
@@ -308,12 +264,10 @@ def main():
         print(f"  Predictions → {pred_path}")
         print(f"  Results     → {result_path}")
 
-    # ── Summary ──────────────────────────────────────────────────────────
     print(f"\n{'='*70}")
     print("ABLATION STUDY COMPLETE")
     print(f"{'='*70}\n")
 
-    # Sort by accuracy
     ranking = sorted(all_results.items(), key=lambda x: x[1]["accuracy_overall"], reverse=True)
 
     print(f"{'Config':<30s} {'Accuracy':>10s} {'Time (s)':>10s}")
@@ -331,7 +285,6 @@ def main():
     print(f"\n★ Best config: top_k={best_cfg['top_k']}, rerank_top_n={best_cfg['rerank_top_n']}")
     print(f"  Proxy accuracy: {best_res['accuracy_overall']:.4f}")
 
-    # Save aggregated summary
     summary_path = os.path.join(args.output_dir, "ablation_summary.json")
     summary = {
         "grid": {"top_k_values": args.top_k_values, "rerank_top_n_values": args.rerank_top_n_values},
@@ -351,7 +304,6 @@ def main():
     print(f'      --output "${{f/predictions_/results_BEM_}}"')
     print(f"  done")
     print(f"{'='*70}")
-
 
 if __name__ == "__main__":
     main()

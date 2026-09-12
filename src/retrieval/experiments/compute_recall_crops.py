@@ -137,10 +137,8 @@ def strategies(retriever, image):
     """Return {name: ranked article urls} for one query image."""
     full = retriever.encode_image(image)
     out = {}
-    # Phase 1: ANN-quality sweep on the plain full image.
     for ef in EF_SWEEP:
         out[f"full_ef{ef}"] = sweep_articles(retriever, full, ef)
-    # Phase 2: query-side tricks at near-exact search.
     out["center80"] = ranked_articles(retriever, retriever.encode_image(center_crop(image, 0.8)), EF_HIGH)
     out["center60"] = ranked_articles(retriever, retriever.encode_image(center_crop(image, 0.6)), EF_HIGH)
     crop_lists = [ranked_articles(retriever, full, EF_HIGH)]
@@ -205,7 +203,6 @@ def main():
             out.flush()
 
     report(args.output)
-
 
 if __name__ == "__main__":
     main()

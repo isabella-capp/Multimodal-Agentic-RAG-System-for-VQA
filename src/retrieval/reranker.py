@@ -3,13 +3,7 @@ from transformers import AutoModelForSequenceClassification, AutoTokenizer
 
 
 class CrossEncoderReranker:
-    """Cross-encoder paragraph reranker.
-
-    Scores each ``(query, paragraph)`` pair jointly with a sequence-classification
-    model (e.g. ``BAAI/bge-reranker-base``) and returns the *top_n* paragraphs by
-    relevance. Unlike a bi-encoder, the query and paragraph attend to each other,
-    and the full paragraph (up to ``max_length`` tokens) is used.
-    """
+    """Cross-encoder paragraph reranker."""
 
     def __init__(
         self,
@@ -36,11 +30,7 @@ class CrossEncoderReranker:
         self, query: str, paragraphs: list[str], top_n: int = 3,
         batch_size: int = 16, force_sort: bool = False,
     ) -> list[str]:
-        """Return the *top_n* paragraphs most relevant to the query.
-
-        When *force_sort* is True, the full pool is scored and sorted even
-        when its size is ≤ top_n (required e.g. for RRF).
-        """
+        """Return the *top_n* paragraphs most relevant to the query."""
         if not paragraphs:
             return []
         if len(paragraphs) <= top_n and not force_sort:
@@ -64,12 +54,6 @@ class CrossEncoderReranker:
         return [paragraphs[i] for i in order[:top_n]]
 
     def score_of_best(self, query: str, paragraphs: list[str], **kw) -> float | None:
-        """Relevance of the best paragraph in the pool, on the model's own scale.
-
-        How well the pool answers the question, in one number, and the natural
-        trigger for a second retrieval round: asking the agent whether what it
-        read is enough has failed every time we tried it, while this is measured
-        and costs nothing — the scores are computed anyway and were thrown away.
-        """
+        """Relevance of the best paragraph in the pool, on the model's own scale."""
         self.rerank(query, paragraphs, top_n=1, force_sort=True, **kw)
         return self.last_top_score

@@ -1,13 +1,3 @@
-"""Create a balanced validation split from the Encyclopedic-VQA test subset.
-
-Produces two files:
-  - encyclopedic_val_split.json   (~200 examples, balanced by question_type)
-  - encyclopedic_test_split.json  (remaining examples for final evaluation)
-
-The split is stratified so that each question_type is represented
-proportionally in both sets.  A fixed seed ensures reproducibility.
-"""
-
 import argparse
 import json
 import os
@@ -49,14 +39,9 @@ def parse_args():
 
 
 def stratified_split(dataset, val_size, seed):
-    """Split dataset into val and test, stratified by question_type.
-
-    Each question_type contributes proportionally to the validation set.
-    If a type has very few examples, at least 1 is included in val.
-    """
+    """Split dataset into val and test, stratified by question_type."""
     rng = random.Random(seed)
 
-    # Group by question_type
     by_type = defaultdict(list)
     for item in dataset:
         by_type[item["question_type"]].append(item)
@@ -67,14 +52,11 @@ def stratified_split(dataset, val_size, seed):
 
     for qtype, items in sorted(by_type.items()):
         rng.shuffle(items)
-        # Proportional allocation, at least 1 per type
         n_val = max(1, round(len(items) / total * val_size))
-        # Don't take more than available
         n_val = min(n_val, len(items) - 1) if len(items) > 1 else 0
         val_items.extend(items[:n_val])
         test_items.extend(items[n_val:])
 
-    # If we overshoot/undershoot the target, adjust
     rng.shuffle(val_items)
     rng.shuffle(test_items)
 
@@ -102,7 +84,6 @@ def main():
     print_stats("Validation split", val_items)
     print_stats("Test split", test_items)
 
-    # Sanity checks
     val_ids = {item["unique_id"] for item in val_items}
     test_ids = {item["unique_id"] for item in test_items}
     assert len(val_ids & test_ids) == 0, "Overlap between val and test!"
@@ -121,7 +102,6 @@ def main():
     with open(test_path, "w", encoding="utf-8") as f:
         json.dump(test_items, f, indent=2, ensure_ascii=False)
     print(f"Test split saved to {test_path}")
-
 
 if __name__ == "__main__":
     main()

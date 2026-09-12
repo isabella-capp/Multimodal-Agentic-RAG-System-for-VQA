@@ -12,21 +12,8 @@
 #SBATCH --error=logs/sweep_%j.err
 #SBATCH --account=cvcs2026
 
-# Setting C (agentic) across model sizes: same agent, tools, prompt and examples,
-# so the model axis is isolated from the scaffold axis. Local models are served
-# on vLLM; a remote model is added when $LLM_API_KEY is set — confirm it first
-# with run_smoke.sh, since not every provider serves tool use.
-#
-# Per model: a naming probe (how often the model names the entity well enough to
-# resolve its article — the recall ceiling of lookup_article) and the full eval.
-# Models already scored are skipped, so re-submitting only fills the gaps.
-#
-#   sbatch scripts/agentic/run_sweep.sh
-#   export LLM_API_KEY=sk-or-v1-... && sbatch --export=ALL scripts/agentic/run_sweep.sh
-
 set -euo pipefail
 
-# model | tag | gpu_util | max_model_len
 LOCAL_MODELS=(
     "Qwen/Qwen2.5-VL-3B-Instruct|qwen25vl3b|0.35|32768"
     "Qwen/Qwen2.5-VL-7B-Instruct|qwen25vl7b|0.45|32768"
@@ -39,7 +26,6 @@ CONCURRENCY=4
 
 PROJECT_DIR="${SLURM_SUBMIT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
 VENV="/homes/$USER/vllm_venv"
-# Set by scripts/submit.sh to a code snapshot; falls back to the live tree.
 CODE_DIR="${CODE_DIR:-$PROJECT_DIR}"
 OUT_DIR="outputs/agentic/sweep"
 
@@ -57,7 +43,6 @@ cd "$PROJECT_DIR"
 mkdir -p "${LOG_DIR:-logs}" "$OUT_DIR"
 source "$CODE_DIR/scripts/lib/vllm.sh"
 
-# evaluate <model> <base_url> <tag>
 evaluate() {
     local model="$1" base_url="$2" tag="$3"
     echo "################ $tag  ($model)"

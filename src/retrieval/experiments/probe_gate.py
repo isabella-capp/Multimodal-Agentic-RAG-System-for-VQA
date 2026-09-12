@@ -1,14 +1,3 @@
-"""Does the best paragraph's score tell us when the pool is missing the answer?
-
-The text channel is worth +60 points where it alone finds the gold article and
--9 where the article was already there, so applying it always nets +1.4 when it
-could net far more. What is missing is a trigger. Asking the model has failed
-five times; this asks the cross-encoder, whose score for the best paragraph is
-already computed on every example and then discarded.
-
-No generation and no vLLM: retriever and reranker only.
-"""
-
 import argparse
 import json
 import os
@@ -31,7 +20,7 @@ def norm(u):
 
 
 def main():
-    p = argparse.ArgumentParser(description=__doc__)
+    p = argparse.ArgumentParser(description="Cross-encoder score of the best pooled passage, per example.")
     p.add_argument("--output", default="outputs/retrieval/gate.jsonl")
     p.add_argument("--limit", type=int, default=1000)
     p.add_argument("--top-k", type=int, default=20)
