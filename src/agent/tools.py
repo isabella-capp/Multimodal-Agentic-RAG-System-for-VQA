@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field
 from retrieval.knowledge_base import normalize
 from retrieval.fusion import Ranking, rank_paragraphs
 
+
 class LookupArticleInput(BaseModel):
     name: str = Field(..., description="The exact name of the entity, person, or object to look up on Wikipedia.")
 
@@ -23,7 +24,8 @@ class ReadArticleInput(BaseModel):
 
 class SearchInput(BaseModel):
     query: str = Field(..., description="Keywords describing what you need to know: what the question asks about, plus any distinctive term. Rare words find things, generic ones ('large', 'population', 'typically') do not.")
-    names: list[str] = Field(default_factory=list, description="Titles of articles to open as well, exactly as they appeared in a previous tool result. Give the ones that could plausibly be the subject; leave empty if none look right.")
+    names: list[str] = Field(default_factory=list, description="Wikipedia article titles to open. Include your best visual guess of what the entity is, and/or any plausible titles that appeared in a previous tool result.")
+
 
 @dataclass
 class Candidate:
@@ -46,26 +48,7 @@ def build_tools(retriever, kb, reranker, bm25, image,
                 text_limit: int = 5, state=None,
                 max_names: int = 4, tool_set: str = "minimal",
                 preview: int = 0, question: str = ""):
-    """Retrieval tools for one query image, over a working set the agent grows.
-
-    Three ways into the KB — by image (EVA-CLIP/FAISS), by name, and by what
-    the articles say — and two ways to read: search across all candidates, or
-    read one article deeply.
-
-    The text entry is the one the pipeline cannot use well. Given the question
-    verbatim it lifts article coverage from 46.6% to 56.1%, but stacking its
-    articles onto the pool costs more in noise than it wins: measured, it gains
-    55 points where it alone finds the article and loses 9 on the five times as
-    many where the article was already there. An agent can call it only after
-    seeing that what it read is about the wrong entity, and can put the rare
-    word the question lacks into the query — which is the whole reason to try
-    this in an agent rather than a fixed pipeline.
-    The working set tracks how each article was found (provenance) but this
-    information is kept internal; tool outputs are unchanged.
-
-    ``ranking`` carries one strategy per operation; see Ranking for why they
-    differ and which were never measured.
-    """
+    """Retrieval tools for one query image, over a working set the agent grows."""
     candidates: dict[str, Candidate] = {}   # keyed by wiki_url
     state = {} if state is None else state   # per-example, never shared
     tried: set[str] = set()
@@ -159,12 +142,7 @@ def build_tools(retriever, kb, reranker, bm25, image,
                 + _format([(by_text.get(p, "?"), p) for p in best]))
 
     def _rank_pool(query: str) -> str:
-        """Rank every paragraph in the working set against `query`.
-
-        Not a tool: `search` is the only caller, and it used to reach this
-        through `search_paragraphs.func()` — a @tool invoked as a function,
-        which is what a helper wearing a decorator looks like.
-        """
+        """Rank every paragraph in the working set against `query`."""
         pool = _pool()
         if not pool:
             return "No candidate articles available for this image."
@@ -175,7 +153,7 @@ def build_tools(retriever, kb, reranker, bm25, image,
             bm25_top_m=ranking.bm25_top_m, bm25_ranker=bm25, reranker=reranker,
             rrf_k=ranking.rrf_k,
         )
-        
+
         state["top_score"] = getattr(reranker, "last_top_score", None)
         return _format([(by_text.get(p, "?"), p) for p in best]) if best else \
             "No relevant paragraphs found."
@@ -184,8 +162,11 @@ def build_tools(retriever, kb, reranker, bm25, image,
     def search(query: str, names: list[str] | None = None) -> str:
         """Find and read passages about what you are looking for.
 
-        `query` is what you want to know, in keywords. `names` are articles to
-        open by title, taken from what an earlier tool listed.
+        `query` is what you want to know, in keywords. `names` are Wikipedia
+        articles to open by title: your best visual guess of the entity, and/or
+        plausible titles from an earlier tool. A schema description is prompt —
+        telling the agent to propose its own name, rather than to pick from the
+        list it was shown, moved `search` from 60.3% of examples to 67.3%.
 
         Splitting them matters: a title is looked up as a title, keywords are
         matched against the text of every article. One string cannot do both —
@@ -199,10 +180,6 @@ def build_tools(retriever, kb, reranker, bm25, image,
         _register_text(kb.search_articles_by_text(query, limit=text_limit))
         return _rank_pool(query)
 
-    # Ablation only: the four-tool interface every C before 2026-09-04 used.
-    # It exists so "does a smaller tool surface help?" can be asked as one
-    # variable — the claim that shrinking it made three middlewares redundant
-    # had no single-variable support until this did.
     if tool_set == "legacy":
         @tool(args_schema=LookupArticleInput)
         def lookup_article(name: str) -> str:
