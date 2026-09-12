@@ -11,17 +11,6 @@
 #SBATCH --output=logs/abl_c_%j.out
 #SBATCH --error=logs/abl_c_%j.err
 #SBATCH --account=cvcs2026
-#
-# One-at-a-time sweep of the parameters the best C uses without ever having
-# tuned them. Everything else is held at the best configuration, so each line
-# reads as "what this knob is worth", not as a search over a grid we cannot
-# afford — nine settings on 1000 examples is already twelve hours.
-#
-#   scripts/submit.sh scripts/agentic/run_ablation_c.sh
-#
-# One vLLM server for the whole sweep: loading it costs 14 minutes, and paying
-# that nine times would be most of a run. Configurations are appended to their
-# own output file, so a job killed by the walltime resumes where it stopped.
 
 set -euo pipefail
 
@@ -35,9 +24,8 @@ LIMIT="${LIMIT:-1000}"
 PROJECT_DIR="${SLURM_SUBMIT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
 VENV="/homes/$USER/vllm_venv"
 CODE_DIR="${CODE_DIR:-$PROJECT_DIR}"
-# The resume guard keys on the results file, so a smoke run must not write where
-# the real one will look: five-example results would make it skip every config.
-OUT_DIR="outputs/agentic/$TAG/ablation$([ "$LIMIT" = 1000 ] || echo "_n$LIMIT")"
+SWEEP="${SWEEP:-$(date +%Y%m%d)}"
+OUT_DIR="outputs/agentic/$TAG/ablation-$SWEEP$([ "$LIMIT" = 1000 ] || echo "_n$LIMIT")"
 
 export HF_HOME="/work/cvcs2026/recursive_retrievers/hf_cache/huggingface"
 export HF_HUB_OFFLINE=1
@@ -56,33 +44,34 @@ source "$CODE_DIR/scripts/lib/vllm.sh"
 ensure_vllm_venv
 serve_model "$MODEL" "$GPU_UTIL" "$MAX_LEN"
 
-# name                    preview  text  names  lookup  gate   iters
+BASE="--legacy-prompt --top-k 20 --rerank-top-n 20 --bm25-top-m 50
+      --preview 8 --text-gate -1 --max-iterations 12
+      --text-limit 5 --max-names 4 --lookup-limit 3
+      --tool-set minimal --tools-strategy rrf
+      --preview-strategy bge --final-strategy bge"   # the pre-sweep default
+
 CONFIGS="
-reference                 8        5     4      3       -1     12
-preview4                  4        5     4      3       -1     12
-preview16                 16       5     4      3       -1     12
-text3                     8        3     4      3       -1     12
-text10                    8        10    4      3       -1     12
-names2                    8        5     2      3       -1     12
-names8                    8        5     8      3       -1     12
-lookup5                   8        5     4      5       -1     12
-gate-2                    8        5     4      3       -2     12
-gate0                     8        5     4      3        0     12
-iters6                    8        5     4      3       -1      6
+reference     |--final-pass
+preview_rrf   |--final-pass --preview-strategy rrf
+preview_bm25  |--final-pass --preview-strategy bm25_bge
+final_rrf     |--final-pass --final-strategy rrf
+final_bm25    |--final-pass --final-strategy bm25_bge
+tools_bge     |--final-pass --tools-strategy bge
+nofinalpass   |
+fourtools     |--final-pass --tool-set legacy
+all_rrf       |--final-pass --preview-strategy rrf --final-strategy rrf
 "
 
-echo "$CONFIGS" | while read -r NAME PREVIEW TEXTL NAMES LOOKUP GATE ITERS; do
+echo "$CONFIGS" | while IFS='|' read -r NAME EXTRA; do
+    NAME=$(echo "$NAME" | tr -d ' ')
     [ -z "${NAME:-}" ] && continue
     OUT="$OUT_DIR/predictions_$NAME.jsonl"
     RES="$OUT_DIR/results_$NAME.json"
     [ -f "$RES" ] && { echo "################ $NAME — already scored, skipping"; continue; }
-    echo "################ $NAME  preview=$PREVIEW text=$TEXTL names=$NAMES lookup=$LOOKUP gate=$GATE iters=$ITERS"
+    echo "################ $NAME   $EXTRA"
     uv run python "$CODE_DIR"/src/agent/run_inference.py \
         --model-name "$MODEL" --base-url "$BASE_URL" --output "$OUT" \
-        --final-pass --legacy-prompt \
-        --top-k 20 --rerank-top-n 20 --tools-strategy bge \
-        --preview "$PREVIEW" --text-limit "$TEXTL" --max-names "$NAMES" \
-        --lookup-limit "$LOOKUP" --text-gate "$GATE" --max-iterations "$ITERS" \
+        $BASE $EXTRA \
         --concurrency "$CONCURRENCY" --debug-samples 0 --limit "$LIMIT" || continue
     (cd "$PROJECT_DIR/evqa_eval" && uv run python "$CODE_DIR/evqa_eval/score_evqa.py" \
         --predictions "../$OUT" --output "../$RES") || true
