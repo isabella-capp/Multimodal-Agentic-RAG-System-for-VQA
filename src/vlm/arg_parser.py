@@ -58,6 +58,10 @@ def parse_args():
         help="RRF smoothing constant (default 60). Only used with --retrieval-strategy rrf.",
     )
     parser.add_argument(
+        "--oracle", action="store_true",
+        help="Upper bound: put the gold article in the pool. Uses the label, so "
+             "it is not a system — it measures what retrieval still costs.")
+    parser.add_argument(
         "--use-naming",
         action="store_true",
         help="Also enter the KB by name: ask the model what the image shows and "

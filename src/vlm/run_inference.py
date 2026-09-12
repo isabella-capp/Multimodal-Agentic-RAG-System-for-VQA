@@ -54,21 +54,7 @@ def setup_retrieval(top_k, retrieval_strategy, no_rerank):
 
 
 def name_entity(model, image_path, guesses=1):
-    """What the model thinks the image shows, as bare Wikipedia-style names.
-
-    Image only, no question: the name is a retrieval key, and letting the
-    question leak in makes the model answer instead of naming.
-
-    Asking for more than one pays because the model is usually wrong: one guess
-    resolves to the right article 11.8% of the time, three reach 17.1% and lift
-    pool coverage from 58.9% to 60.9%. Five add 0.4 points and eight nothing, so
-    three is where the curve flattens.
-
-    The wording matters as much as the number. Asking for candidates that are
-    genuinely different beats asking for close relatives (17.1% against 14.4%):
-    the first guess is wrong 88% of the time, so three names around it are three
-    names in the wrong place.
-    """
+    """What the model thinks the image shows, as bare Wikipedia-style names."""
     prompt = (NAMING_PROMPT if guesses == 1
               else MULTI_NAMING_PROMPTS["diverse"].format(n=guesses))
     resp = model.llm.invoke([
@@ -89,13 +75,7 @@ def name_entity(model, image_path, guesses=1):
 
 
 def name_articles(kb, names, limit):
-    """Articles the predicted names resolve to, deduplicated, best guess first.
-
-    ``limit`` is per guess, so three guesses can bring in three times as many
-    articles as one. That is not free — the text channel showed a bigger pool
-    costing 9 points on the examples whose article was already there — so the
-    two are separate knobs rather than one.
-    """
+    """Articles the predicted names resolve to, deduplicated, best guess first."""
     out, seen = [], set()
     for name in ([names] if isinstance(names, str) else names or []):
         for h in kb.lookup_articles(name, limit=limit):
@@ -108,13 +88,7 @@ def name_articles(kb, names, limit):
 
 
 def text_articles(kb, question, limit):
-    """Articles whose text matches the question, as retrieval results.
-
-    The channel that does not go through the model at all. On its own it reaches
-    23.1% recall@20 against 40.6% for the image index, but 12.3 of those points
-    are examples neither the image nor the name found, which lifts the pool from
-    46.4% to 58.7%.
-    """
+    """Articles whose text matches the question, as retrieval results."""
     return [{"wiki_url": h["wiki_url"], "title": h["title"], "score": None,
              "source": "text"}
             for h in kb.search_articles_by_text(question, limit=limit)]
@@ -126,18 +100,7 @@ def build_context(
     retrieval_strategy: str = "bm25_bge", rrf_k: int = 60,
     text_gate=None, text_articles_fn=None,
 ):
-    """Retrieve articles for the image, pool and rank their paragraphs.
-
-    ``extra_articles`` are prepended to what the image index returns, so a
-    second entry point into the KB widens the pool instead of replacing it.
-
-    When ``no_rerank`` is set, the first ``rerank_top_n`` paragraphs from the
-    raw pool are returned directly (existing shortcut, preserved as-is).
-    Otherwise ``rank_paragraphs`` is called with the chosen strategy.
-
-    Returns ``(top_paragraphs, retrieved_context)``, or ``None`` when
-    retrieval yields no usable paragraphs.
-    """
+    """Retrieve articles for the image, pool and rank their paragraphs."""
     user_image = Image.open(image_path).convert("RGB")
     results = retriever.retrieve(user_image, question)
 
@@ -187,8 +150,7 @@ def build_context(
             }
             for r in results
         ],
-        # None where no gate is configured, so a closed gate is not confused
-        # with an arm that never had one
+        # None where no gate is configured, so a closed gate is distinguishable
         "text_gate_open": gate_open if text_gate is not None else None,
         "num_paragraphs_total": len(pooled),
         "num_paragraphs_used": len(top_paragraphs),
@@ -254,16 +216,20 @@ def main():
         if retriever is not None:
             try:
                 name, extra = None, []
+                if args.oracle:
+                    extra = [{"wiki_url": item["wikipedia_url"],
+                              "title": item.get("wikipedia_title", ""),
+                              "score": None, "source": "oracle"}]
                 if args.use_naming:
                     name = name_entity(model, item["image_path"], args.naming_guesses)
-                    extra = name_articles(kb, name, args.naming_limit)
+                    extra = extra + name_articles(kb, name, args.naming_limit)
                 if args.use_text and args.text_gate is None:
                     extra = extra + text_articles(kb, item["question"], args.text_limit)
                 context = build_context(retriever, kb, reranker, bm25,
                                         item["question"], item["image_path"],
                                         args.rerank_top_n, args.bm25_top_m,
                                         args.no_rerank, extra,
-                                        retrieval_strategy=args.retrieval_strategy,
+                                        retrieval_strategy=args.retrieval_strategy, oracle=args.oracle,
                                         rrf_k=args.rrf_k,
                                         text_gate=args.text_gate if args.use_text else None,
                                         text_articles_fn=lambda: text_articles(
@@ -296,7 +262,6 @@ def main():
               reranker=paths.CROSS_ENCODER_MODEL,
               legacy_prompt=args.legacy_prompt, direct_prompt=args.direct_prompt)
     print(f"Done. Predictions saved to {args.output}")
-
 
 if __name__ == "__main__":
     main()
