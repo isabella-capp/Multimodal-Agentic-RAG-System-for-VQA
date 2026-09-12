@@ -1,0 +1,73 @@
+{
+ "legacy": [
+  {
+   "description": "Add Wikipedia articles matching an entity name to the candidate pool.",
+   "name": "lookup_article",
+   "schema": {
+    "name": {
+     "description": "The exact name of the entity, person, or object to look up on Wikipedia.",
+     "title": "Name",
+     "type": "string"
+    }
+   }
+  },
+  {
+   "description": "Find candidate Wikipedia articles whose reference images are visually similar to the input image.\n\n        Use this to generate candidates; do not assume the top result is correct.\n        All returned articles are added to the working set automatically.",
+   "name": "search_by_image",
+   "schema": {}
+  },
+  {
+   "description": "Search for relevant passages across ALL currently loaded articles.",
+   "name": "search_paragraphs",
+   "schema": {
+    "query": {
+     "description": "A short, highly focused keyword phrase (e.g. 'Arabidopsis lyrata outcrossing') to find specific information. Do not use full sentences or questions.",
+     "title": "Query",
+     "type": "string"
+    }
+   }
+  },
+  {
+   "description": "Extract relevant text passages from one specific candidate article.",
+   "name": "read_article",
+   "schema": {
+    "query": {
+     "description": "The keyword phrase to search for inside this specific article.",
+     "title": "Query",
+     "type": "string"
+    },
+    "title": {
+     "description": "The EXACT title of the Wikipedia article, exactly as it appeared in previous tool results.",
+     "title": "Title",
+     "type": "string"
+    }
+   }
+  }
+ ],
+ "minimal": [
+  {
+   "description": "Find candidate Wikipedia articles whose reference images are visually similar to the input image.\n\n        Use this to generate candidates; do not assume the top result is correct.\n        All returned articles are added to the working set automatically.",
+   "name": "search_by_image",
+   "schema": {}
+  },
+  {
+   "description": "Find and read passages about what you are looking for.\n\n        `query` is what you want to know, in keywords. `names` are Wikipedia\n        articles to open by title: your best visual guess of the entity, and/or\n        plausible titles from an earlier tool. A schema description is prompt \u2014\n        telling the agent to propose its own name, rather than to pick from the\n        list it was shown, moved `search` from 60.3% of examples to 67.3%.\n\n        Splitting them matters: a title is looked up as a title, keywords are\n        matched against the text of every article. One string cannot do both \u2014\n        \"Aeschynomene as a plant in the US\" finds nothing as a title, and\n        \"Aeschynomene\" alone finds little as a query.",
+   "name": "search",
+   "schema": {
+    "names": {
+     "description": "Wikipedia article titles to open. Include your best visual guess of what the entity is, and/or any plausible titles that appeared in a previous tool result.",
+     "items": {
+      "type": "string"
+     },
+     "title": "Names",
+     "type": "array"
+    },
+    "query": {
+     "description": "Keywords describing what you need to know: what the question asks about, plus any distinctive term. Rare words find things, generic ones ('large', 'population', 'typically') do not.",
+     "title": "Query",
+     "type": "string"
+    }
+   }
+  }
+ ]
+}
