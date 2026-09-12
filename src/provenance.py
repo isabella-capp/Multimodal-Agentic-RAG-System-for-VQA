@@ -30,18 +30,19 @@ def _snapshot() -> dict | None:
     return info
 
 
+def _gpu_name() -> str | None:
+    """The GPU model this ran on, for judging whether two timings compare."""
+    try:
+        out = subprocess.run(["nvidia-smi", "--query-gpu=name", "--format=csv,noheader"],
+                             capture_output=True, text=True, timeout=10)
+        names = [l.strip() for l in out.stdout.splitlines() if l.strip()]
+        return names[0] if names else None
+    except Exception:
+        return None
+
+
 def stamp(output: str, **extra) -> dict:
-    """Record which code produced a predictions file, next to it as .meta.json.
-
-    Outputs are git-ignored, so without this there is no way back from a result
-    to the code that made it.
-
-    Under scripts/submit.sh the answer comes from the snapshot's RUN_INFO, which
-    was written at SUBMIT time. Reading git here instead would report whatever
-    the working tree holds when the job finally starts — which is exactly what
-    changes while a job sits in the queue, so it would quietly record the wrong
-    commit for the run it is describing.
-    """
+    """Record which code produced a predictions file, next to it as .meta.json."""
     snap = _snapshot()
     meta = {
         "run_id": (snap or {}).get("run_id"),
@@ -52,6 +53,8 @@ def stamp(output: str, **extra) -> dict:
         "dirty": (snap["dirty"] != "0 files") if snap else bool(_git("status", "--porcelain")),
         "command": " ".join(sys.argv),
         "slurm_job_id": os.getenv("SLURM_JOB_ID"),
+        "node": os.getenv("SLURMD_NODENAME"),
+        "gpu": _gpu_name(),
         "finished_at": time.strftime("%Y-%m-%d %H:%M:%S"),
         **extra,
     }

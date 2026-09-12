@@ -13,8 +13,7 @@ from vlm.dataset import build_record, done_ids, load_dataset
 
 
 def load_todo(output: str, limit: int | None = None) -> list[dict]:
-    """Examples still to predict. Output files are appended to, so a killed run
-    resumes where it stopped instead of redoing everything."""
+    """Examples still to predict. Output files are appended to, so a killed run"""
     dataset = load_dataset(paths.JSON_PATH, paths.BASE_FOLDER)
     if limit is not None:
         dataset = dataset[:limit]
@@ -26,14 +25,10 @@ def load_todo(output: str, limit: int | None = None) -> list[dict]:
 
 def run_batch(items: list[dict], predict, output: str, concurrency: int = 8,
               **meta) -> None:
-    """Run ``predict(item) -> record`` over items, appending JSONL to ``output``.
-
-    Shared by the baselines and the agent: only ``predict`` differs. Records are
-    written as they complete, so progress survives a killed job — which also
-    means the output order is not the dataset order.
-    """
+    """Run ``predict(item) -> record`` over items, appending JSONL to ``output``."""
     failures: list[str] = []
     elapsed: list[float] = []
+    wall_t0 = time.time()
 
     def work(item):
         t0 = time.time()
@@ -65,9 +60,13 @@ def run_batch(items: list[dict], predict, output: str, concurrency: int = 8,
         print(f"{len(failures)}/{len(items)} examples failed:")
         for msg, n in Counter(failures).most_common(3):
             print(f"  [{n}x] {msg[:160]}")
+    wall = time.time() - wall_t0
+    meta.update(concurrency=concurrency, wall_seconds=round(wall, 1),
+                throughput_per_min=round(60 * len(items) / wall, 1) if wall else None)
     if elapsed:
         from statistics import mean, median
-        print(f"Seconds per example: mean {mean(elapsed):.2f}, median {median(elapsed):.2f}")
+        print(f"Seconds per example: mean {mean(elapsed):.2f}, median {median(elapsed):.2f}"
+              f"  (concurrency {concurrency}, {60 * len(items) / wall:.1f}/min)")
         meta.update(avg_seconds_per_example=round(mean(elapsed), 2),
                     median_seconds_per_example=round(median(elapsed), 2))
     provenance.stamp(output, examples=len(items), failures=len(failures), **meta)
