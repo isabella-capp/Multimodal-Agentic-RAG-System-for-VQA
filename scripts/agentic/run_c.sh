@@ -11,31 +11,12 @@
 #SBATCH --output=logs/agentic_%j.out
 #SBATCH --error=logs/agentic_%j.err
 #SBATCH --account=cvcs2026
-#
-# Setting C alone, for iterating on the agent. A and B do not touch the agent's
-# code, so re-running them per variant would spend two thirds of a job
-# reproducing numbers we already have — use scripts/run_abc.sh for the reference
-# table, this one for every attempt after it.
-#
-#   VARIANT=hedge scripts/submit.sh scripts/agentic/run_c.sh
-#
-# Run the full 1000 by default. Loading vLLM, EVA-CLIP, FAISS and the reranker
-# costs ~14 minutes whatever you do, while inference over all 1000 examples takes
-# ~29: a 5-example SMOKE=1 spends the same 14 minutes to produce 9 seconds of
-# signal. Only worth it to catch something obviously broken after a model change.
 
 set -euo pipefail
 
 MODEL="${MODEL:-Qwen/Qwen3-VL-8B-Instruct}"
 TAG="${TAG:-qwen3vl8b}"
 
-# Every default below is our best measured C (0.470 +/- 0.003 on the 8B), so a
-# bare run reproduces it and a variant is one variable away. They were 0 for a
-# long time and we passed the real values by hand each time, which is how a C
-# ended up measured against B with the wrong retrieval mode.
-#
-# To vary one, set it: PREVIEW=0, UNIFIED=0, TEXT_GATE= (empty turns the gate
-# off), FINAL_PASS=0, WITH_READ=0.
 GPU_UTIL="${GPU_UTIL:-0.50}"      # the retriever and reranker share this GPU
 MAX_LEN="${MAX_LEN:-32768}"
 TOP_K="${TOP_K:-20}"
@@ -51,23 +32,9 @@ TEXT_LIMIT="${TEXT_LIMIT:-5}"
 MAX_NAMES="${MAX_NAMES:-4}"
 LOOKUP_LIMIT="${LOOKUP_LIMIT:-3}"
 MAX_IT="${MAX_IT:-12}"
-# One strategy per ranking operation, from fusion.STRATEGIES. They are three
-# different operations and the best value differs for each, which is the whole
-# reason they are separate:
-#
-#   TOOLS_STRATEGY    what the agent reads mid-loop.  rrf.
-#   PREVIEW_STRATEGY  the passages shown beside the image candidates.  bge —
-#                     and never measured against anything else, because it was
-#                     hard-coded until now. The ablation swept how MANY passages
-#                     (4/8/16) while the ranking that picks them was fixed.
-#   FINAL_STRATEGY    the ranking the answer is generated from.  bge 0.4740
-#                     against rrf 0.4610. Note B goes the other way on what is
-#                     nominally the same operation — rrf 0.4760 twice against
-#                     bm25_bge 0.4660 — which we cannot yet explain.
-# minimal = the two tools; legacy = the four-tool interface, for the ablation.
 TOOL_SET="${TOOL_SET:-minimal}"
 TOOLS_STRATEGY="${TOOLS_STRATEGY:-rrf}"
-PREVIEW_STRATEGY="${PREVIEW_STRATEGY:-bge}"
+PREVIEW_STRATEGY="${PREVIEW_STRATEGY:-rrf}"
 FINAL_STRATEGY="${FINAL_STRATEGY:-bge}"
 
 PROJECT_DIR="${SLURM_SUBMIT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
@@ -107,8 +74,6 @@ echo "reranker: $CROSS_ENCODER_MODEL   strategies: $TOOLS_STRATEGY/$PREVIEW_STRA
 ensure_vllm_venv
 serve_model "$MODEL" "$GPU_UTIL" "$MAX_LEN" "${NEED_GB:-25}"
 
-# With VLLM_GPU set, the server has its own card; everything the Python
-# side loads goes on the other one.
 [ -n "${RETRIEVER_GPU:-}" ] && export CUDA_VISIBLE_DEVICES="$RETRIEVER_GPU"
 
 echo "################ C — agentic  ($MODEL${VARIANT:+, variant $VARIANT}, strategies=$TOOLS_STRATEGY/$PREVIEW_STRATEGY/$FINAL_STRATEGY)"
