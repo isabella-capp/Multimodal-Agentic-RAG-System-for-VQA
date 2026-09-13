@@ -1,3 +1,4 @@
+import itertools
 import os
 import re
 import sys
@@ -93,6 +94,9 @@ def text_articles(kb, question, limit):
              "source": "text"}
             for h in kb.search_articles_by_text(question, limit=limit)]
 
+
+_MIN_ATTEMPTS = 5
+_MAX_FAIL_RATE = 0.5
 
 def build_context(
     retriever, kb, reranker, bm25, question, image_path, rerank_top_n,
@@ -208,12 +212,15 @@ def main():
         )
 
     shown = []
+    retrieval_errors: list[str] = []
+    retrieval_attempts = itertools.count(1)
 
     def predict(item):
         base = NO_RAG_PROMPT_LEGACY if args.legacy_prompt else NO_RAG_PROMPT
         prompt = base.format(question=item["question"])
         paragraphs = retrieved = None
         if retriever is not None:
+            attempt = next(retrieval_attempts)
             try:
                 name, extra = None, []
                 if args.oracle:
@@ -229,7 +236,7 @@ def main():
                                         item["question"], item["image_path"],
                                         args.rerank_top_n, args.bm25_top_m,
                                         args.no_rerank, extra,
-                                        retrieval_strategy=args.retrieval_strategy, oracle=args.oracle,
+                                        retrieval_strategy=args.retrieval_strategy,
                                         rrf_k=args.rrf_k,
                                         text_gate=args.text_gate if args.use_text else None,
                                         text_articles_fn=lambda: text_articles(
@@ -241,7 +248,15 @@ def main():
                     prompt = build_rag_prompt(item["question"], paragraphs,
                                               args.legacy_prompt, args.direct_prompt)
             except Exception as e:
+                retrieval_errors.append(f"{item['unique_id']}: {e}")
                 tqdm.write(f"retrieval failed for {item['unique_id']}: {e}")
+                if (attempt >= _MIN_ATTEMPTS
+                        and len(retrieval_errors) / attempt > _MAX_FAIL_RATE):
+                    raise SystemExit(
+                        f"aborting: retrieval failed on {len(retrieval_errors)} of "
+                        f"{attempt} attempts, the last being {e}. A retrieval run "
+                        f"that answers without retrieval scores like the no-retrieval "
+                        f"baseline and looks plausible, so it is stopped here.")
 
         prediction = extract_answer(
             model.generate_response(item["image_path"], prompt))
