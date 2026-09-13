@@ -45,6 +45,28 @@ def used(path: str) -> dict[str, int]:
     return out
 
 
+def check_call_kwargs(path: str) -> int:
+    """Every keyword at a call site must exist in the callee's signature."""
+    tree = ast.parse(open(path).read())
+    sigs = {n.name: n.args for n in ast.walk(tree) if isinstance(n, ast.FunctionDef)}
+    bad = 0
+    for node in ast.walk(tree):
+        if not (isinstance(node, ast.Call) and isinstance(node.func, ast.Name)):
+            continue
+        a = sigs.get(node.func.id)
+        if a is None:
+            continue
+        if a.kwarg:
+            continue
+        names = {x.arg for x in a.args + a.kwonlyargs + a.posonlyargs}
+        for kw in node.keywords:
+            if kw.arg and kw.arg not in names:
+                print(f"{path}:{node.lineno}: {node.func.id}() has no parameter "
+                      f"{kw.arg!r}")
+                bad += 1
+    return bad
+
+
 def main() -> int:
     failed = False
     for entry, sources in ENTRYPOINTS.items():
@@ -55,6 +77,9 @@ def main() -> int:
         for name, line in sorted(missing.items(), key=lambda kv: kv[1]):
             print(f"  {entry}:{line}  args.{name} is not a declared argument")
             failed = True
+        for source in set(sources) | {entry}:
+            if check_call_kwargs(source):
+                failed = True
     return 1 if failed else 0
 
 
