@@ -70,11 +70,40 @@ channel's 23.1. Do not conflate them.
 
 ## §4.6 Static versus agentic — `tab:main_results`
 
-**Not yet run as a single fair comparison.** See `outputs/paper/TODO.md` §0b.
-The intended command is `scripts/submit.sh scripts/run_abc.sh`, serving A, B and
-C against one vLLM instance at equal concurrency, with C at the adopted default.
-Until that lands the numbers in this section come from separate jobs and the
-latency column is not comparable.
+A, B and C against **one** vLLM server in one job: same weights, same endpoint,
+same examples in the same order, at equal concurrency, so they differ only in
+method. Two runs of one configuration land within ~0.3 points and the gaps we
+care about are that size, so anything measured across separate jobs is noise.
+
+```
+scripts/submit.sh scripts/run_abc.sh --time=08:00:00
+```
+
+`C_CONCURRENCY` defaults to `CONCURRENCY`, which is what makes the latency
+column comparable; lower it alone if C runs out of KV cache.
+
+**On a larger model** the weights are split over two cards with tensor
+parallelism and a **third card is left for EVA-CLIP and the cross-encoder**.
+This is not optional: at `GPU_UTIL=0.90` on two cards vLLM takes 42.6 of the
+44.4 GiB and the retriever OOMs the moment B starts, after A has already been
+scored — which looks like a mid-job crash rather than a sizing error.
+
+```
+MODEL=Qwen/Qwen3-VL-32B-Instruct TAG=qwen3vl32b GPU_UTIL=0.85 \
+  TP=2 VLLM_GPU=0,1 RETRIEVER_GPU=2 NEED_GB=70 \
+  scripts/submit.sh scripts/run_abc.sh \
+    --constraint=gpu_L40S_45G --gres=gpu:3 --time=20:00:00
+```
+
+Not the 96 GB RTXPro6000B nodes, even though one card would hold the model: they
+are Blackwell (sm_120) and the project's torch is pinned to cu124, which stops at
+sm_90. vLLM serves there once `scripts/setup/warm_flashinfer.sh` has run, but
+EVA-CLIP dies with "no kernel image is available for execution on the device" as
+soon as B or C starts. L40S is Ada, where the stack is proven.
+
+`NEED_GB` is node-local **disk** for staging the weights, not GPU memory. If the
+node has less, the run falls back to serving from `$HF_HOME` over BEEGFS, which
+works but is slow under contention.
 
 ## §4.7 Ablation — `tab:ablation`
 
@@ -98,7 +127,7 @@ by `SWEEP` so a rerun never silently reuses an old result.
 | Mid-loop: CE alone | `tools_bge` | 47.0 | −0.2 (p=0.839) |
 | Four-tool interface | `fourtools` | 41.7 | −5.5 (p<0.001) |
 | No final pass | `nofinalpass` | 42.1 | −5.1 (p<0.001) |
-| RRF everywhere | `all_rrf` | pending | |
+| RRF everywhere | `all_rrf` | 46.2 | −1.0 (p=0.463) |
 
 Deltas from
 `uv run python src/ablation/compare_runs.py <dir>/results_reference.scores.jsonl <dir>/results_<config>.scores.jsonl`.
@@ -117,6 +146,31 @@ example.
 | Gate: 47.6% of examples forced, `avg_forced_calls` 0.48 | `forced_examples_pct`, `avg_forced_calls` in the same files |
 | Below-τ observed but not forced: +0.6 to +1.0 pt (two tools), +5.8 (four) | `gate_below_examples_pct` − `forced_examples_pct` |
 | Agent stops after one step on 71.8% with the gold article vs 29.9% without | gate probe joined to the C run's step counts |
+
+## Earlier Qwen2.5-VL measurements (recovered from the notebooks, 2026-09-13)
+
+These predate the provenance machinery, so they carry no `meta.json` and the
+model attribution comes from a notebook label rather than a recorded command
+line. Treat them as indicative, not citable. They are kept because they are the
+only record of where the project started, and because the first of them is a
+calibration point against published work.
+
+| | BEM | source |
+|---|---|---|
+| A, no retrieval, Qwen2.5-VL-3B | **0.245** (n=1000) | `outputs/baselines/results_A.json` |
+| B, top-20 image + cross-encoder top-20 | 0.401 | `outputs/final_test/results_cross_topK20_rerankN20.json` |
+| B, best of the sweep (B5) | 0.403 | `outputs/baselines/results_B5.json` |
+
+Two caveats that the notebook recorded and that matter if these are quoted:
+
+- The 0.401 uses the free-form prompt with no answer-format block. Under the
+  shared answer format the comparable figure is **0.359**. The notebook's own
+  warning: *"The historical 0.401 is not a target."*
+- ReAG reports Qwen2.5-VL-3B zero-shot at **21.9** on E-VQA single-hop against
+  our 24.5. On n=1000 with p≈0.22 the 95% sampling interval is about ±2.7, so
+  the two are consistent rather than identical --- which is the most we can ask
+  of two samples of the same split. Jobs 105429/105430 re-measure this with
+  provenance on both 3B and 7B.
 
 ## §4.2 Qwen2.5-VL history
 
