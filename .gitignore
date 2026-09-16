@@ -21,3 +21,4 @@ outputs/
 data/
 # Code snapshots taken by scripts/submit.sh
 runs/
+.vscode/

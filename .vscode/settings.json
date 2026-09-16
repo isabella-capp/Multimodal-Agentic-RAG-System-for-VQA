@@ -1,5 +1,0 @@
-{
-    "terminal.integrated.automationProfile.linux": {
-        "path": "${workspaceFolder}/bash.sh"
-    }
-}
