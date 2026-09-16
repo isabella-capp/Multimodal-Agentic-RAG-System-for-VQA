@@ -8,7 +8,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..",
 from tqdm import tqdm
 
 import paths
-from retrieval.knowledge_base import KnowledgeBase
+from retrieval.knowledge_base import KnowledgeBase, load_df_cache
 from vlm.dataset import load_dataset
 
 KS = (1, 5, 10, 20, 50)
@@ -28,6 +28,7 @@ def main():
     args = p.parse_args()
 
     os.makedirs(os.path.dirname(args.output) or ".", exist_ok=True)
+    load_df_cache(paths.TERM_DF_PATH)
     kb = KnowledgeBase(paths.KB_PATH)
 
     image = {}
