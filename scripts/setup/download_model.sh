@@ -14,9 +14,9 @@ set -euo pipefail
 export HF_HOME="/work/cvcs2026/recursive_retrievers/hf_cache/huggingface"
 export PATH="$HOME/.local/bin:$PATH"
 unset SSL_CERT_DIR
-cd "/homes/$USER/cvcs2026"; mkdir -p logs
+cd "${SLURM_SUBMIT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"; mkdir -p logs
 
-MODEL="${1:-Qwen/Qwen2.5-VL-7B-Instruct}"
+MODEL="${1:-Qwen/Qwen3-VL-8B-Instruct}"
 echo "downloading $MODEL into $HF_HOME ..."
 uv run python -c "
 from huggingface_hub import snapshot_download

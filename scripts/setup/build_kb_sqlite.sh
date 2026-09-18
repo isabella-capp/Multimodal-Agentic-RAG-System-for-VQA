@@ -12,7 +12,7 @@
 
 set -euo pipefail
 
-PROJECT_DIR="/homes/$USER/cvcs2026"
+PROJECT_DIR="${SLURM_SUBMIT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
 
 export PATH="$HOME/.local/bin:$PATH"
 export PYTHONUNBUFFERED=1

@@ -14,7 +14,7 @@
 
 set -euo pipefail
 
-PROJECT_DIR="/homes/$USER/cvcs2026"
+PROJECT_DIR="${SLURM_SUBMIT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
 
 export HF_HOME="/work/cvcs2026/recursive_retrievers/hf_cache/huggingface"
 export HF_HUB_OFFLINE=1
