@@ -89,10 +89,3 @@ Choosing τ=−1 over τ=0 was right: the first sweep put τ=0 nominally ahead b
 
 The four-tool and final-pass effects replicate strongly: −5.3 and −5.8 against
 −5.5 and −5.1, p<0.001 in both sweeps.
-
-## Not reproducible here
-
-The Qwen2.5-VL experiments that motivated the model choice (§4.2) predate the
-provenance machinery and the middlewares they used were removed from the tree;
-those survive in `archive/historical_middlewares.py`. We cite them as
-observations and report no table from them.
