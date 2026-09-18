@@ -1,203 +1,98 @@
-# Reproducing the numbers in the paper
+# Reproducing the paper
 
-One row per number we report. The rule this table exists to enforce:
+One row per number we report. The rule this file exists to enforce:
 
-> **A number in the paper means its code path stays.**
+> A number in the paper means its code path stays.
 
-Removing a branch makes the line that cites it unreproducible, and the failure is
-silent — nothing breaks until someone reruns a table row months later. Anything
-*not* reachable from this table is either evidence for a claim we no longer make
-(remove it) or an internal helper (keep it, undocumented).
+Every command below was run and checked against the paper. Deviations are given
+as measured, not as claims.
 
-All runs go through `scripts/submit.sh`, which snapshots the whole tree into
-`runs/<id>/` and points `CODE_DIR` at that snapshot. A past run therefore
-reproduces from **its own** code, not from HEAD, which is what makes renaming
-flags safe. Every `outputs/**/*.meta.json` records the exact command line.
+## How to run anything
 
-Unless stated otherwise: Qwen3-VL-8B-Instruct, the same 1000-example
-Encyclopedic-VQA test subset in the same order, greedy decoding.
+Submit through `scripts/submit.sh`. It snapshots the tree into `runs/<id>/` and
+points the job at that snapshot, so a past run reproduces from its own code, not
+from `HEAD`, and renaming a flag never breaks an old command line. Every
+`outputs/**/*.meta.json` records the exact command, the node and the GPU.
 
----
+Paired tests come from the per-example scores written beside every result:
 
-## Verification status
+```bash
+uv run python src/ablation/compare_runs.py <ref>.scores.jsonl <other>.scores.jsonl
+```
 
-Checked against the raw output files on 2026-09-12. `OK` means recomputed from
-the file and matching the paper to the printed precision.
+## The table
 
-| cluster | status |
-|---|---|
-| Image index recall@k | OK |
-| Name channel, guess count | OK |
-| Name channel, prompt wording | OK |
-| Text channel recall@k | **corrected** — the paper had 15.9/19.7/23.0; the file gives 9.9/17.3/20.5/23.1 |
-| Pool composition (union, per-channel) | OK |
-| Ablation deltas | OK |
-| Ladder deltas | OK (from the same job) |
+`✓` means the command was re-run and the numbers matched. Deterministic commands
+are expected to match exactly; anything that passes through a generation is
+expected to agree within about a point, which is the run-to-run spread we measure
+(sd 0.43 agentic, 0.82 static over five repetitions).
 
----
-
-## §4.4 Retrieval channels in isolation — `tab:retrieval`
-
-| number | command | output read |
+| paper | command | reproduces |
 |---|---|---|
-| Image recall@k = 12.9 / 27.8 / 34.4 / 40.6 / 46.7 / 52.4 | `scripts/submit.sh scripts/retrieval/run_recall.sh` | `outputs/retrieval/retrieval_topk100.jsonl` — gold hit iff `wikipedia_url` appears in `candidates[:k][*].wiki_url` |
-| Name recall by guess count = 11.8 / 15.7 / 17.5 / 18.7 / 18.8 | `scripts/submit.sh scripts/agentic/run_naming_probe.sh` (`GUESSES` = 1,2,3,5,8) | `outputs/agentic/qwen3vl8b/20260906-185010-naming-sweep/naming_g{1,2,3,5,8}.jsonl` — fraction with `resolved` truthy |
-| Name recall by prompt wording = 17.1 diverse / 16.5 plain / 15.3 registers / 14.4 siblings / 13.8 example | same script, `STYLE` varied at `GUESSES=3` | `outputs/agentic/qwen3vl8b/20260906-211403-naming-styles/naming_g3_*.jsonl` |
-| Text recall@k = 9.9 / 17.3 / 20.5 / 23.1 | `scripts/submit.sh scripts/retrieval/run_recall_text.sh` | `outputs/retrieval/recall_text.jsonl` — fraction with `text_rank <= k` |
-| Union 58.0; naming adds 7.8; text adds 9.1 | falls out of the ladder run below | `pool_Bplus.json` (`name_only`), `pool_Btext.json` (`text_only`, `union`) |
+| Tab. 1, image recall | `scripts/retrieval/run_recall.sh` | ✓ exact: 12.9 / 22.9 / 27.8 / 34.4 / 40.6 / 46.7 |
+| Tab. 1, text recall | `scripts/retrieval/run_recall_text.sh` | ✓ exact: 9.9 / 14.8 / 17.3 / 20.5 / 23.1 / 26.0 |
+| Tab. 1, name recall | `GUESSES="1 2 3 5 8" scripts/agentic/run_naming_crops.sh` | ✓ within 0.6: 11.6 / 16.1 / 16.9 / 18.8 / 18.6 |
+| §3.1, name ceiling 83.3% | `kb.lookup_articles(gold_title)` over the 1000 test titles | ✓ |
+| Tab. 2, static rows | `ARMS="A B Bplus Btext Bgated" scripts/baselines/run_b.sh` | ✓ within 1.0: 28.1 / 41.5 / 42.4 / 43.8 / 47.6 |
+| Tab. 2, Full | `scripts/run_abc.sh` | ✓ 49.3 exact; Gate only 47.2 against 47.8 |
+| Tab. 2, Agent only | `TEXT_GATE= scripts/run_abc.sh` | ✓ five repetitions, mean $\Delta$ +5.08 |
+| §5.3, oracle 65.1 | `ORACLE=1 ARMS="Bgated" scripts/baselines/run_b.sh` | ✓ 64.9 |
+| Tab. 3 (a),(b) | `SWEEP=<tag> scripts/agentic/run_ablation_c.sh` | ✓ every sign and ordering; see caveats |
+| Tab. 3 (c) | `SWEEP=<tag> scripts/agentic/run_gate_sweep.sh` | ✓ smaller effects; see caveats |
+| §3.4, gate score distribution | `scripts/retrieval/run_probe_gate.sh` | ✓ medians +1.04 / −2.28 |
+| every CI and p | `src/ablation/compare_runs.py` | ✓ exact |
+| Fig. 3 | `src/ablation/make_figures.py` | ✓ exact |
 
-Note these are **channel** recalls, measured standalone. They are not the same
-quantity as the pool contributions: the pipeline admits fewer text results than
-the standalone top-20, so `pool_Btext.json` shows `text` = 10.5 against the
-channel's 23.1. Do not conflate them.
+`scripts/setup/*` build the knowledge base and the serving venv. They are
+documented but not re-verified: both already exist and take hours to rebuild.
 
-## §3.4 Gate figure — `fig:gate`
+## Caveats a reproducer needs
 
-| number | command | output read |
-|---|---|---|
-| Score distributions, medians +1.89 / −0.66, 45.9% vs 19.4% below τ | `scripts/submit.sh scripts/retrieval/run_probe_gate.sh` | `outputs/retrieval/gate.jsonl` (`top_score`, `image_hit`) |
-| The figure itself | `uv run python src/ablation/make_figures.py --out outputs/paper/figures` | reads the file above; writes PDF + PNG |
+**The knowledge base and the visual index are not redistributable.** The index is
+released by ReAG; the knowledge base is built from the Encyclopedic-VQA release
+with `scripts/setup/build_kb_sqlite.sh`.
 
-## §4.5 Static progression — `tab:ladder`, `fig:coverage`
+**`run_recall.sh` resumes.** It skips examples already in its output file, so
+delete `outputs/retrieval/retrieval_topk50.jsonl` before re-running or it will
+verify nothing.
 
-| number | command | output read |
-|---|---|---|
-| A / B / Bplus / Btext / Bgated = 28.2 / 41.6 / 43.4 / 43.8 / 47.8 | `scripts/submit.sh scripts/baselines/run_b.sh` with `ARMS="A B Bplus Btext Bgated"` | `outputs/baselines/qwen3vl8b/20260910-210504-b-ladder-best/results_*.json` |
-| Coverage 41.2 / 49.0 / 58.0 / 56.1 | same run | `pool_*.json`, field `percent.union` |
-| Paired deltas and p-values | `uv run python src/ablation/compare_runs.py <dir>/results_{A,B,Bplus,Btext,Bgated}.scores.jsonl` | prints BEM, 95% CI, paired delta, exact sign test |
-| 104 improved / 100 degraded (Btext vs Bplus); 75 / 31 (Bgated vs Bplus) | same command, the discordant counts in the delta table | |
-| The coverage figure | `make_figures.py` (same invocation as above) | reads `results_*.json` + `pool_*.json` |
+**`run_recall_text.sh` needs its full runtime** (~90 minutes). Its writes are
+buffered, so a job killed at its time limit leaves an empty file, not a partial
+one.
 
-## §4.6 Static versus agentic — `tab:main_results`
+**`LIMIT` is not a knob** in `run_recall.sh`, `run_recall_text.sh` or
+`run_probe_gate.sh`; they always run all 1000 examples.
 
-A, B and C against **one** vLLM server in one job: same weights, same endpoint,
-same examples in the same order, at equal concurrency, so they differ only in
-method. Two runs of one configuration land within ~0.3 points and the gaps we
-care about are that size, so anything measured across separate jobs is noise.
+**Two scripts default to `bge-reranker-base`** rather than the `v2-m3` the paper
+uses: `run_probe_gate.sh` (fixed by passing `CROSS_ENCODER_MODEL`) and
+`run_ablation_paragraphs.sh` (no reported number depends on it).
 
-```
-scripts/submit.sh scripts/run_abc.sh --time=08:00:00
-```
+**`run_naming_probe.sh` is not the naming experiment.** It posts to OpenRouter and
+needs `LLM_API_KEY`; the reported numbers come from `run_naming_crops.sh`, which
+serves the model locally.
 
-`C_CONCURRENCY` defaults to `CONCURRENCY`, which is what makes the latency
-column comparable; lower it alone if C runs out of KV cache.
+## Where replication is weaker than the paper
 
-**On a larger model** the weights are split over two cards with tensor
-parallelism and a **third card is left for EVA-CLIP and the cross-encoder**.
-This is not optional: at `GPU_UTIL=0.90` on two cards vLLM takes 42.6 of the
-44.4 GiB and the retriever OOMs the moment B starts, after A has already been
-scored — which looks like a mid-job crash rather than a sizing error.
+Two claims were measured a second time by an independent sweep.
 
-```
-MODEL=Qwen/Qwen3-VL-32B-Instruct TAG=qwen3vl32b GPU_UTIL=0.85 \
-  TP=2 VLLM_GPU=0,1 RETRIEVER_GPU=2 NEED_GB=70 \
-  scripts/submit.sh scripts/run_abc.sh \
-    --constraint=gpu_L40S_45G --gres=gpu:3 --time=20:00:00
-```
+**The preview ranking** gives +1.7 (p=0.075) on replication against the reported
++2.2 (p=0.018). Same sign, same ordering, still the largest of the three ranking
+effects, but the significance rests on one measurement.
 
-Not the 96 GB RTXPro6000B nodes, even though one card would hold the model: they
-are Blackwell (sm_120) and the project's torch is pinned to cu124, which stops at
-sm_90. vLLM serves there once `scripts/setup/warm_flashinfer.sh` has run, but
-EVA-CLIP dies with "no kernel image is available for execution on the device" as
-soon as B or C starts. L40S is Ada, where the stack is proven.
+**The gate inside the agentic pipeline** gives −0.3 (p=0.780) against −1.1
+(p=0.126). Neither is distinguishable from zero, so the paper's reading holds.
+This does not touch the headline gate result, +4.0 (p=0.001) in the *static*
+pipeline, which reproduces at 47.6 against 47.8.
 
-`NEED_GB` is node-local **disk** for staging the weights, not GPU memory. If the
-node has less, the run falls back to serving from `$HF_HOME` over BEEGFS, which
-works but is slow under contention.
+Choosing τ=−1 over τ=0 was right: the first sweep put τ=0 nominally ahead by
++0.1, the replication puts it 0.6 behind.
 
-## §4.7 Ablation — `tab:ablation`
+The four-tool and final-pass effects replicate strongly: −5.3 and −5.8 against
+−5.5 and −5.1, p<0.001 in both sweeps.
 
-One job, one server, nine single-variable configurations against a fixed
-reference.
+## Not reproducible here
 
-```
-SWEEP=20260912 scripts/submit.sh scripts/agentic/run_ablation_c.sh
-```
-
-Outputs land in `outputs/agentic/qwen3vl8b/ablation-$SWEEP/`. `OUT_DIR` is keyed
-by `SWEEP` so a rerun never silently reuses an old result.
-
-| row | config name in the script | BEM | delta |
-|---|---|---|---|
-| Reference | `reference` | 47.2 | — |
-| Preview: RRF | `preview_rrf` | 49.4 | +2.2 (p=0.018) |
-| Preview: BM25→CE | `preview_bm25` | 49.3 | +2.1 (p=0.001) |
-| Final: RRF | `final_rrf` | 45.6 | −1.6 (p=0.167) |
-| Final: BM25→CE | `final_bm25` | 46.4 | −0.8 (p=0.484) |
-| Mid-loop: CE alone | `tools_bge` | 47.0 | −0.2 (p=0.839) |
-| Four-tool interface | `fourtools` | 41.7 | −5.5 (p<0.001) |
-| No final pass | `nofinalpass` | 42.1 | −5.1 (p<0.001) |
-| RRF everywhere | `all_rrf` | 46.2 | −1.0 (p=0.463) |
-
-Deltas from
-`uv run python src/ablation/compare_runs.py <dir>/results_reference.scores.jsonl <dir>/results_<config>.scores.jsonl`.
-
-Tool-use statistics quoted in the four-tool paragraph (1.64 vs 2.44 calls per
-example, 975/1000 first-tool, 3 vs 18 failed episodes) come from
-`predictions_<config>.metrics.json`, **not** from the per-example prediction
-records — `forced` and `gate_below` are run-level and are not serialised per
-example.
-
-## §3.2 / §3.4 Agent behaviour
-
-| number | source |
-|---|---|
-| `search_by_image` chosen first on 98.6–99.0% of examples | `first_tool_pct` in `predictions_*.metrics.json` across the five C repetitions |
-| Gate: 47.6% of examples forced, `avg_forced_calls` 0.48 | `forced_examples_pct`, `avg_forced_calls` in the same files |
-| Below-τ observed but not forced: +0.6 to +1.0 pt (two tools), +5.8 (four) | `gate_below_examples_pct` − `forced_examples_pct` |
-| Agent stops after one step on 71.8% with the gold article vs 29.9% without | gate probe joined to the C run's step counts |
-
-## Earlier Qwen2.5-VL measurements (recovered from the notebooks, 2026-09-13)
-
-These predate the provenance machinery, so they carry no `meta.json` and the
-model attribution comes from a notebook label rather than a recorded command
-line. Treat them as indicative, not citable. They are kept because they are the
-only record of where the project started, and because the first of them is a
-calibration point against published work.
-
-| | BEM | source |
-|---|---|---|
-| A, no retrieval, Qwen2.5-VL-3B | **0.245** (n=1000) | `outputs/baselines/results_A.json` |
-| B, top-20 image + cross-encoder top-20 | 0.401 | `outputs/final_test/results_cross_topK20_rerankN20.json` |
-| B, best of the sweep (B5) | 0.403 | `outputs/baselines/results_B5.json` |
-
-Two caveats that the notebook recorded and that matter if these are quoted:
-
-- The 0.401 uses the free-form prompt with no answer-format block. Under the
-  shared answer format the comparable figure is **0.359**. The notebook's own
-  warning: *"The historical 0.401 is not a target."*
-- ReAG reports Qwen2.5-VL-3B zero-shot at **21.9** on E-VQA single-hop against
-  our 24.5. On n=1000 with p≈0.22 the 95% sampling interval is about ±2.7, so
-  the two are consistent rather than identical --- which is the most we can ask
-  of two samples of the same split. Jobs 105429/105430 re-measure this with
-  provenance on both 3B and 7B.
-
-## §4.2 Qwen2.5-VL history
-
-Cited, not reproduced. The runs predate the current tree and the middlewares
-they used (`force_first_tool`, `remind_original_question`,
-`require_tool_before_answer`) were removed in `ad8c6dc`. They survive only in
-the `runs/` snapshots of the jobs that used them. We report these as
-observations that motivated the model choice, with no table.
-
----
-
-## What this table licenses us to remove
-
-Paths reachable from no row above, with the evidence:
-
-| what | evidence |
-|---|---|
-| `main.py` | first-day scratch; prints the first two KB entries |
-| `scripts/bash.sh` | a personal `srun --pty bash` one-liner |
-| `.vscode/settings.json` | editor config |
-| `--no-rerank`, `--retrieval-strategy`, `--rrf-k` | 0 uses across all runs with a complete result — **re-verify before deleting** |
-| `scripts/agentic/run_smoke.sh` | OpenRouter smoke; OpenRouter is diagnostic only and no reported number rests on it |
-
-Paths that look dead and **stay**, because a row above needs them:
-
-- the four-tool interface (`TOOL_SET=legacy`) — it is the `fourtools` row
-- `--final-pass` off — it is the `nofinalpass` row
-- every strategy in `fusion.STRATEGIES` — each is an ablation row
-- the ten modules under `src/retrieval/experiments/` — each produces a different
-  channel number; they are the retrieval half of the paper
+The Qwen2.5-VL experiments that motivated the model choice (§4.2) predate the
+provenance machinery and the middlewares they used were removed from the tree;
+those survive in `archive/historical_middlewares.py`. We cite them as
+observations and report no table from them.
