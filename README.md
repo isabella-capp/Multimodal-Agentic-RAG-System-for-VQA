@@ -2,8 +2,7 @@
 
 **Isabella Cappellino, Marin Cervinschi** — University of Modena and Reggio Emilia
 
-Course project for Computer Vision and Cognitive Systems, 2026. Unpublished; the
-write-up is in `outputs/paper/` and is not tracked here.
+Course project for Computer Vision and Cognitive Systems, 2026.
 
 <p align="center"><img src="assets/teaser.png" width="55%"></p>
 
@@ -92,8 +91,4 @@ into an article:
 
 Matching is string matching, deliberately not embeddings: the EVA-CLIP text tower
 is misaligned with the image index and returns near-zero recall even when given
-the ground-truth title. Given the gold title this lookup reaches **83.3%** of
-articles, which is a ceiling on the name channel.
-
-Rebuild the derived tables on an existing database with `--index-only`, which
-takes seconds instead of re-ingesting the source JSON.
+the ground-truth title.
