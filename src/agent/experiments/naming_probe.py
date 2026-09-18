@@ -169,7 +169,7 @@ def main():
     print(f"{'variant':12s} {'name -> right article':>22s} {'exact title':>13s} {'answered':>10s}")
     for v, (hit, exact, attempted, tot) in results.items():
         print(f"{v:12s} {100 * hit / tot:21.1f}% {100 * exact / tot:12.1f}% {100 * attempted / tot:9.1f}%")
-    print(f"\nreference: image index recall@20 = 40.6%, name-lookup ceiling = 84.2%")
+    print("\nreference: image index recall@20 = 40.6%, name-lookup ceiling = 84.2%")
     print("=" * 66)
     print(f"Per-example detail: {args.output}")
 

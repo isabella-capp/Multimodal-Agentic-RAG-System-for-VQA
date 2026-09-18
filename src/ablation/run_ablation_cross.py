@@ -300,9 +300,9 @@ def main():
     print("NOTE: The proxy scores above use simple exact-match heuristics.")
     print("For official BEM scores, run the evaluation script on each predictions file:")
     print(f"  for f in {args.output_dir}/predictions_cross_*.jsonl; do")
-    print(f'    uv run python evqa_eval/score_evqa.py --predictions "$f" \\')
-    print(f'      --output "${{f/predictions_/results_BEM_}}"')
-    print(f"  done")
+    print('    uv run python evqa_eval/score_evqa.py --predictions "$f" \\')
+    print('      --output "${f/predictions_/results_BEM_}"')
+    print("  done")
     print(f"{'='*70}")
 
 if __name__ == "__main__":

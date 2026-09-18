@@ -5,7 +5,6 @@ from dataclasses import dataclass, field
 from langchain_core.tools import tool
 from pydantic import BaseModel, Field
 
-from retrieval.knowledge_base import normalize
 from retrieval.fusion import Ranking, rank_paragraphs
 
 
@@ -51,8 +50,6 @@ def build_tools(retriever, kb, reranker, bm25, image,
     """Retrieval tools for one query image, over a working set the agent grows."""
     candidates: dict[str, Candidate] = {}   # keyed by wiki_url
     state = {} if state is None else state   # per-example, never shared
-    tried: set[str] = set()
-    tried_raw: set[str] = set()
     cache: dict = {}
 
     def _register_image(articles: list[dict]) -> None:

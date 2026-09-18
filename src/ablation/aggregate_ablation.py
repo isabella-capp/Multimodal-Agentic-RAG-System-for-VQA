@@ -92,7 +92,7 @@ def main():
         )
 
     best = results[0]
-    print(f"\n★ Best configuration:")
+    print("\n★ Best configuration:")
     print(f"  top_k={best['top_k']}, rerank_top_n={best['rerank_top_n']}")
     print(f"  Overall accuracy: {best['accuracy_overall']:.4f}")
     for qt in qtypes_sorted:
@@ -106,7 +106,7 @@ def main():
     top_k_values = sorted(pivot.keys())
     rerank_n_values = sorted({e["rerank_top_n"] for e in results})
 
-    print(f"\n\nPivot table (Overall Accuracy):")
+    print("\n\nPivot table (Overall Accuracy):")
     print(f"{'top_k \\ rerank_n':>18s}", end="")
     for rn in rerank_n_values:
         print(f"  {rn:>8d}", end="")

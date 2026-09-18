@@ -198,7 +198,7 @@ def report(path: str, modes: list[str]) -> None:
         int_key = f"{mode}_bm25_int"
         if any(r["ranks"].get(int_key) is not None for r in records):
             int_ranks = [r["ranks"].get(int_key) for r in records]
-            row2 = f"  └ BM25 pre-filter    "
+            row2 = "  └ BM25 pre-filter    "
             for k in REPORT_KS:
                 hits = sum(1 for r in int_ranks if r is not None and r <= k)
                 row2 += f"{100*hits/n:6.1f}% "

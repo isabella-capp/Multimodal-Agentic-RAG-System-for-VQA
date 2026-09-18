@@ -1,7 +1,5 @@
 from prompts import ANSWER_FORMAT
 
-from prompts import ANSWER_FORMAT
-
 SYSTEM_PROMPT = f"""\
 You are a multimodal question-answering assistant. You are given an image and a \
 question about the entity shown in it, plus tools that retrieve Wikipedia evidence.
