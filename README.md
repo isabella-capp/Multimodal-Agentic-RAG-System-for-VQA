@@ -1,17 +1,22 @@
 # Deciding When to Retrieve: Agentic and Gated Retrieval for Encyclopedic VQA
 
-Code for our CVCS 2026 project on multimodal retrieval-augmented generation over
-Encyclopedic-VQA. The paper is in `outputs/paper/` (not tracked).
+**Isabella Cappellino, Marin Cervinschi** — University of Modena and Reggio Emilia
+
+Course project for Computer Vision and Cognitive Systems, 2026. Unpublished; the
+write-up is in `outputs/paper/` and is not tracked here.
+
+<p align="center"><img src="assets/teaser.png" width="55%"></p>
 
 We reach a Wikipedia knowledge base through three channels — image similarity,
 entity-name resolution, and lexical search over article text — and study how the
 decision to use them should be made. Two mechanisms are compared against the same
 single-step baseline: an agentic loop that writes its own queries, and a
 deterministic gate that reads a cross-encoder score the pipeline has already
-computed.
+computed. The loop is worth +5.0 BEM; the gate recovers +4.0 of that with no
+agent and no extra generation.
 
-**Every number in the paper maps to a command in [`REPRODUCE.md`](REPRODUCE.md).**
-Start there if you want to reproduce a table.
+**Every number in the write-up maps to a command in [`REPRODUCE.md`](REPRODUCE.md),
+and each of those commands has been re-run and checked.**
 
 ## Requirements
 
@@ -19,7 +24,7 @@ Start there if you want to reproduce a table.
 - [`uv`](https://docs.astral.sh/uv/) on `PATH`. The project and scoring
   environments are synced on first run.
 - Shared assets under `/work/cvcs2026/`:
-  - `hf_cache/` with Qwen3-VL-8B, Qwen2.5-VL-3B/7B, EVA-CLIP-8B and
+  - `hf_cache/` with Qwen3-VL-8B, EVA-CLIP-8B and
     `bge-reranker-v2-m3` (add more with `scripts/setup/download_model.sh <hf-id>`).
   - `encyclopedic/` with `knn.index`, `knn.json`, `encyclopedic_kb_wiki.db` and
     `encyclopedic_test_subset.json`.
@@ -43,9 +48,9 @@ Every knob is an environment variable, so a variant is a submit line and not an
 edit:
 
 ```bash
-TEXT_GATE= scripts/submit.sh scripts/run_abc.sh      # gate off
-MODEL=Qwen/Qwen2.5-VL-7B-Instruct TAG=qwen25vl7b ARMS="A B Bplus Btext Bgated" \
-  scripts/submit.sh scripts/baselines/run_b.sh
+TEXT_GATE= scripts/submit.sh scripts/run_abc.sh                    # gate off
+ARMS="A B Bplus Btext Bgated" scripts/submit.sh scripts/baselines/run_b.sh
+ORACLE=1 ARMS="Bgated" scripts/submit.sh scripts/baselines/run_b.sh
 ```
 
 The arm the paper calls **Gate only** is `Bgated` in the code and in the output
@@ -69,14 +74,12 @@ src/retrieval/      the three indices, ranking strategies, the SQLite knowledge 
 src/retrieval/experiments/   channel-level measurements (recall, fusion, the gate probe)
 src/ablation/       paired significance tests and the paper figures
 scripts/            SLURM launchers, one per experiment
-tests/              cheap guards, see below
-archive/            code removed from the tree that the paper still cites
 ```
 
 `outputs/`, `runs/` and `logs/` are gitignored: they are ours, not part of the
 release.
 
-## The knowledge base
+## Data
 
 `encyclopedic_kb_wiki.db` (~24 GB) holds ~2.0M articles in `articles` (url, title)
 and their text in `paragraphs`, plus two derived tables that turn an entity *name*
@@ -94,17 +97,3 @@ articles, which is a ceiling on the name channel.
 
 Rebuild the derived tables on an existing database with `--index-only`, which
 takes seconds instead of re-ingesting the source JSON.
-
-## Tests
-
-Three guards, each written after a bug that cost a run:
-
-```bash
-uv run python tests/check_args.py     # declared arguments, and call-site keywords
-uv run python tests/smoke_tools.py    # builds and calls the tools with stubs
-uv run python tests/tool_contract.py  # the tool text the model reads is unchanged
-```
-
-`tool_contract.py` compares the rendered tool descriptions against a stored
-snapshot. Tool text is part of the prompt: changing it changes the measurements,
-so the test fails loudly and tells you to rerun the affected experiments.
