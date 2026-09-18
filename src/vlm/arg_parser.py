@@ -1,11 +1,11 @@
 import argparse
 
-MODEL_NAME = "Qwen/Qwen2.5-VL-3B-Instruct"
+MODEL_NAME = "Qwen/Qwen3-VL-8B-Instruct"
 
 
 def parse_args():
     parser = argparse.ArgumentParser(
-        description="Qwen2.5-VL inference on Encyclopedic-VQA"
+        description="VLM inference on Encyclopedic-VQA"
     )
     parser.add_argument("--output", default="outputs/predictions.jsonl")
     parser.add_argument("--model-name", default=MODEL_NAME)

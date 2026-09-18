@@ -18,7 +18,7 @@ CODE_DIR="${CODE_DIR:-$PROJECT_DIR}"
 export HF_HOME="/work/cvcs2026/recursive_retrievers/hf_cache/huggingface"
 export HF_HUB_OFFLINE=1
 export PYTHONUNBUFFERED=1
-export CROSS_ENCODER_MODEL="${CROSS_ENCODER_MODEL:-BAAI/bge-reranker-base}"
+export CROSS_ENCODER_MODEL="${CROSS_ENCODER_MODEL:-BAAI/bge-reranker-v2-m3}"
 export PATH="$HOME/.local/bin:$PATH"
 export UV_CACHE_DIR="${UV_CACHE_DIR:-/work/cvcs2026/recursive_retrievers/$USER/.uv_cache}"
 mkdir -p "$UV_CACHE_DIR"

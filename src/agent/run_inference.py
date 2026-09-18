@@ -37,7 +37,7 @@ def ranking_from_args(args) -> Ranking:
 def parse_args():
     p = argparse.ArgumentParser(description="Agentic RAG evaluation on Encyclopedic-VQA")
     p.add_argument("--output", default="outputs/predictions_agentic.jsonl")
-    p.add_argument("--model-name", default="Qwen/Qwen2.5-VL-3B-Instruct")
+    p.add_argument("--model-name", default="Qwen/Qwen3-VL-8B-Instruct")
     p.add_argument("--base-url", default="http://localhost:8000/v1")
     p.add_argument("--limit", type=int, default=None)
     p.add_argument("--top-k", type=int, default=20)
