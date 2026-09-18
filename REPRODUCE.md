@@ -32,6 +32,8 @@ expected to agree within about a point, which is the run-to-run spread we measur
 | Tab. 1, image recall | `scripts/retrieval/run_recall.sh` | ✓ exact: 12.9 / 22.9 / 27.8 / 34.4 / 40.6 / 46.7 |
 | Tab. 1, text recall | `scripts/retrieval/run_recall_text.sh` | ✓ exact: 9.9 / 14.8 / 17.3 / 20.5 / 23.1 / 26.0 |
 | Tab. 1, name recall | `GUESSES="1 2 3 5 8" scripts/agentic/run_naming_crops.sh` | ✓ within 0.6: 11.6 / 16.1 / 16.9 / 18.8 / 18.6 |
+| §3.1, CLIP text tower 0% | `scripts/retrieval/run_recall_queries.sh` | ✓ `wikipedia_title.text` resolves 0.0% against 52.4% for the image |
+| §5.2, top-$k$ sweep | `SPLIT=test scripts/baselines/run_ablation_cross.sh` | not re-run: measured with Qwen2.5-VL-3B, which the paper states |
 | §3.1, name ceiling 83.3% | `kb.lookup_articles(gold_title)` over the 1000 test titles | ✓ |
 | Tab. 2, static rows | `ARMS="A B Bplus Btext Bgated" scripts/baselines/run_b.sh` | ✓ within 1.0: 28.1 / 41.5 / 42.4 / 43.8 / 47.6 |
 | Tab. 2, Full | `scripts/run_abc.sh` | ✓ 49.3 exact; Gate only 47.2 against 47.8 |
@@ -45,6 +47,17 @@ expected to agree within about a point, which is the run-to-run spread we measur
 
 `scripts/setup/*` build the knowledge base and the serving venv. They are
 documented but not re-verified: both already exist and take hours to rebuild.
+
+## Paths
+
+Cluster-specific locations sit in two places and nowhere else:
+
+- `src/paths.py` reads `EVQA_DATA` for the dataset, knowledge base and visual
+  index, defaulting to our cluster's `/work/cvcs2026/encyclopedic`.
+- The launchers export `HF_HOME` for the model cache and expect the vLLM
+  environment at `$HOME/vllm_venv`, built by `scripts/setup/setup_vllm_venv.sh`.
+
+Running elsewhere means setting `EVQA_DATA` and `HF_HOME`; no file needs editing.
 
 ## Caveats a reproducer needs
 
@@ -62,14 +75,6 @@ one.
 
 **`LIMIT` is not a knob** in `run_recall.sh`, `run_recall_text.sh` or
 `run_probe_gate.sh`; they always run all 1000 examples.
-
-**Two scripts default to `bge-reranker-base`** rather than the `v2-m3` the paper
-uses: `run_probe_gate.sh` (fixed by passing `CROSS_ENCODER_MODEL`) and
-`run_ablation_paragraphs.sh` (no reported number depends on it).
-
-**`run_naming_probe.sh` is not the naming experiment.** It posts to OpenRouter and
-needs `LLM_API_KEY`; the reported numbers come from `run_naming_crops.sh`, which
-serves the model locally.
 
 ## Where replication is weaker than the paper
 
