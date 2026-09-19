@@ -111,16 +111,5 @@ done
 stop_model
 
 echo "################ summary  ($MODEL)"
-python3 -c "
-import json, os
-for s in '$SETTINGS'.split():
-    r = '$OUT_DIR/results_%s.json' % s
-    m = '$OUT_DIR/predictions_%s.meta.json' % s
-    try:
-        a = json.load(open(r))
-        t = json.load(open(m)).get('avg_seconds_per_example') if os.path.exists(m) else None
-        print(f\"  {s}: {a['accuracy_overall']:.4f}   {a['accuracy_by_type']}   {t or '?'} s/example\")
-    except Exception as e:
-        print(f'  {s}: n/a ({e})')
-"
+uv run python "$CODE_DIR"/src/ablation/summarise.py "$OUT_DIR"
 cat "$CODE_DIR/RUN_INFO" 2>/dev/null || echo "code: live tree"

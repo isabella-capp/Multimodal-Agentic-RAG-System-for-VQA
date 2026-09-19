@@ -80,19 +80,5 @@ done
 stop_model
 
 echo "################ summary"
-python3 -c "
-import json, glob, os
-rows=[]
-for f in sorted(glob.glob('$OUT_DIR/results_*.json')):
-    n=os.path.basename(f)[8:-5]
-    try:
-        r=json.load(open(f))
-        m=f.replace('results_','predictions_').replace('.json','.metrics.json')
-        M=json.load(open(m)) if os.path.exists(m) else {}
-        rows.append((n, r['accuracy_overall'], M.get('avg_tool_calls',0), M.get('avg_seconds_per_example',0)))
-    except Exception as e: print(f'  {n}: {e}')
-print(f\"{'config':22s} {'BEM':>7} {'tool':>6} {'sec':>7}\")
-for n,a,t,s in sorted(rows, key=lambda x:-x[1]):
-    print(f'  {n:20s} {a:7.4f} {t:6.2f} {s:7.1f}')
-"
+uv run python "$CODE_DIR"/src/ablation/summarise.py "$OUT_DIR"
 cat "$CODE_DIR/RUN_INFO" 2>/dev/null || echo "code: live tree"

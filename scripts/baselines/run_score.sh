@@ -32,11 +32,6 @@ for P in $PREDS; do
         --predictions "$P" --output "${P%.jsonl}.pool.json" || true
 done
 echo "################ summary"
-python3 -c "
-import json, sys
-for p in '''$PREDS'''.split():
-    r = p[:-6].replace('predictions_', 'results_') + '.json'
-    try:
-        d = json.load(open(r)); print(f\"  {p.split('/')[-2]:26s} {p.split('/')[-1]:22s} BEM={d['accuracy_overall']:.4f}\")
-    except Exception as e: print(f'  {p}: n/a ({e})')
-"
+for D in $(printf '%s\n' $PREDS | xargs -n1 dirname | sort -u); do
+    uv run python "$CODE_DIR"/src/ablation/summarise.py "$D"
+done

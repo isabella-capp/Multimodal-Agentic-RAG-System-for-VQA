@@ -101,15 +101,5 @@ for ARM in $ARMS; do
 done
 
 echo "################ summary"
-python3 -c "
-import json
-for arm in '$ARMS'.split():
-    try:
-        r = json.load(open('$OUT_DIR/results_%s.json' % arm))
-        p = json.load(open('$OUT_DIR/pool_%s.json' % arm))['percent']
-        print(f\"  {arm:6s} BEM={r['accuracy_overall']:.4f}   right article: \"
-              f\"image={p['image']}%  name={p['name']}%  union={p['union']}%\")
-    except Exception as e:
-        print(f'  {arm}: n/a ({e})')
-" 2>/dev/null || true
+uv run python "$CODE_DIR"/src/ablation/summarise.py "$OUT_DIR"
 cat "$CODE_DIR/RUN_INFO" 2>/dev/null || echo "code: live tree"
