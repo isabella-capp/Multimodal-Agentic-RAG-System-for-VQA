@@ -58,7 +58,7 @@ final_rrf     |--final-pass --final-strategy rrf
 final_bm25    |--final-pass --final-strategy bm25_bge
 tools_bge     |--final-pass --tools-strategy bge
 nofinalpass   |
-fourtools     |--final-pass --tool-set legacy
+fourtools     |--final-pass --tool-set four
 all_rrf       |--final-pass --preview-strategy rrf --final-strategy rrf
 "
 

@@ -177,7 +177,7 @@ def build_tools(retriever, kb, reranker, bm25, image,
         _register_text(kb.search_articles_by_text(query, limit=text_limit))
         return _rank_pool(query)
 
-    if tool_set == "legacy":
+    if tool_set == "four":
         @tool(args_schema=LookupArticleInput)
         def lookup_article(name: str) -> str:
             """Add Wikipedia articles matching an entity name to the candidate pool."""

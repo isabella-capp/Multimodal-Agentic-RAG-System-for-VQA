@@ -78,7 +78,7 @@ for ARM in $ARMS; do
                           --use-text --text-limit "$TEXT_LIMIT"
                           --text-gate "$TEXT_GATE") ;;
     esac
-    echo "################ $ARM  (top-k=$TOP_K top-n=$TOP_N bm25-m=$BM25_TOP_M)$([ "$LEGACY" = 1 ] && echo ", legacy prompt")"
+    echo "################ $ARM  (top-k=$TOP_K top-n=$TOP_N bm25-m=$BM25_TOP_M)"
     uv run python "$CODE_DIR"/src/vlm/run_inference.py \
         --model-name "$MODEL" --base-url "$BASE_URL" \
         --output "$OUT_DIR/predictions_$ARM.jsonl" \

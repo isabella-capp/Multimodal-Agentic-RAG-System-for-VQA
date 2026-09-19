@@ -72,7 +72,7 @@ class AgenticRAG:
         if self.text_gate is None:
             return []
         # the gate forces by name, so the name must exist in the installed set
-        second = "search_paragraphs" if self.tool_set == "legacy" else "search"
+        second = "search_paragraphs" if self.tool_set == "four" else "search"
         return [open_text_gate(state, second, self.text_gate)]
 
     def run(self, image_path: str, question: str) -> AgentRun:
@@ -96,7 +96,7 @@ class AgenticRAG:
                               state=state, tool_set=self.tool_set,
                               preview=self.preview, question=question),
             # the prompt must name the tools that are actually installed
-            system_prompt=(SYSTEM_PROMPT if self.tool_set == "legacy" else
+            system_prompt=(SYSTEM_PROMPT if self.tool_set == "four" else
                            PREVIEW_PROMPT if self.preview else UNIFIED_PROMPT),
             middleware=self._middleware(question, state),
         )

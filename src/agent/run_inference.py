@@ -62,10 +62,10 @@ def parse_args():
                    help="Run a second search only where the best pooled paragraph "
                         "scores below this. Evidence-driven iteration: the model's "
                         "own sense of whether it has enough has failed every test.")
-    p.add_argument("--tool-set", default="minimal", choices=["minimal", "legacy"],
-                   help="Ablation: 'minimal' is the two tools every current "
-                        "run uses; 'legacy' is the four-tool interface, so the "
-                        "tool surface can be varied as one variable.")
+    p.add_argument("--tool-set", default="two", choices=["two", "four"],
+                   help="Ablation: 'two' is the interface every reported run "
+                        "uses; 'four' splits the textual operations back into "
+                        "separate tools.")
     p.add_argument("--tools-strategy", default=Ranking.tools, choices=STRATEGIES,
                    help="How the tools rank what the agent reads mid-loop.")
     p.add_argument("--preview-strategy", default=Ranking.preview, choices=STRATEGIES,
