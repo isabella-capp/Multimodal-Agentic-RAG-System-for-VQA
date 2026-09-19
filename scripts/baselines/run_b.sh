@@ -32,18 +32,13 @@ TEXT_LIMIT="${TEXT_LIMIT:-5}"
 POOL_ARTICLES="${POOL_ARTICLES:-20}"
 TEXT_GATE="${TEXT_GATE:--1}"
 RETRIEVAL_STRATEGY="${RETRIEVAL_STRATEGY:-rrf}"
-LEGACY="${LEGACY:-1}"
-DIRECT="${DIRECT:-0}"
 
 PROJECT_DIR="${SLURM_SUBMIT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
 VENV="/homes/$USER/vllm_venv"
 CODE_DIR="${CODE_DIR:-$PROJECT_DIR}"
 OUT_DIR="outputs/baselines/$TAG/${RUN_ID:-manual}"
 
-PROMPT=()
-[ "$LEGACY" = "1" ] && PROMPT=(--legacy-prompt)
-[ "$ORACLE" = "1" ] && PROMPT+=(--oracle)
-[ "$DIRECT" = "1" ] && PROMPT=(--direct-prompt)
+ORACLE_FLAG=(); [ "$ORACLE" = "1" ] && ORACLE_FLAG=(--oracle)
 
 if [ "${SMOKE:-0}" = "1" ]; then
     LIMIT=(--limit 5); DEBUG="${DEBUG:-5}"; OUT_DIR="$OUT_DIR/smoke"
@@ -66,7 +61,7 @@ cd "$PROJECT_DIR"
 mkdir -p "${LOG_DIR:-logs}" "$OUT_DIR"
 source "$CODE_DIR/scripts/lib/vllm.sh"
 
-echo "arms: $ARMS   reranker: $CROSS_ENCODER_MODEL   legacy-prompt: $LEGACY"
+echo "arms: $ARMS   reranker: $CROSS_ENCODER_MODEL"
 ensure_vllm_venv
 serve_model "$MODEL" "$GPU_UTIL" "$MAX_LEN" "${NEED_GB:-25}"
 
@@ -90,7 +85,7 @@ for ARM in $ARMS; do
         "${RETRIEVAL[@]}" --top-k "$TOP_K" --rerank-top-n "$TOP_N" --bm25-top-m "$BM25_TOP_M" \
         --retrieval-strategy "$RETRIEVAL_STRATEGY" \
         --concurrency "$CONCURRENCY" --debug-samples "$DEBUG" \
-        "${CHANNELS[@]}" "${PROMPT[@]}" "${LIMIT[@]}"
+        "${CHANNELS[@]}" "${ORACLE_FLAG[@]}" "${LIMIT[@]}"
 done
 
 stop_model

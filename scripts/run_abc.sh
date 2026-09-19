@@ -75,13 +75,13 @@ for S in $SETTINGS; do
     A)
         uv run python "$CODE_DIR"/src/vlm/run_inference.py \
             --model-name "$MODEL" --base-url "$BASE_URL" \
-            --output "$OUT_DIR/predictions_A.jsonl" --legacy-prompt \
+            --output "$OUT_DIR/predictions_A.jsonl"\
             --concurrency "$CONCURRENCY" --debug-samples "$DEBUG" "${LIMIT[@]}"
         ;;
     B)
         uv run python "$CODE_DIR"/src/vlm/run_inference.py \
             --model-name "$MODEL" --base-url "$BASE_URL" \
-            --output "$OUT_DIR/predictions_B.jsonl" --legacy-prompt \
+            --output "$OUT_DIR/predictions_B.jsonl"\
             --use-retrieval --top-k "$TOP_K" --rerank-top-n "$TOP_N" \
             --retrieval-strategy "$RETRIEVAL_STRATEGY" \
             --use-naming --naming-guesses "$NAMING_GUESSES" --naming-limit "$NAMING_LIMIT" \
@@ -92,7 +92,7 @@ for S in $SETTINGS; do
         uv run python "$CODE_DIR"/src/agent/run_inference.py \
             --model-name "$MODEL" --base-url "$BASE_URL" \
             --output "$OUT_DIR/predictions_C.jsonl" \
-            --final-pass --legacy-prompt \
+            --final-pass\
             --preview "$PREVIEW" "${GATE[@]}" \
             --top-k "$TOP_K" --rerank-top-n "$TOP_N" \
             --tools-strategy "$TOOLS_STRATEGY" \

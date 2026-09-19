@@ -55,11 +55,6 @@ def parse_args():
                    help="Articles kept per title looked up.")
     p.add_argument("--preview", type=int, default=0,
                    help="Passages search_by_image shows from the image pool (0: titles only).")
-    p.add_argument("--direct-prompt", action="store_true",
-                   help="With --final-pass, long-form answers without preamble.")
-    p.add_argument("--legacy-prompt", action="store_true",
-                   help="With --final-pass, answer with the prompt that has no "
-                        "answer-format block, matching baseline B's long-form arm.")
     p.add_argument("--final-pass", action="store_true",
                    help="Answer from the pool the agent assembled with one call, "
                         "the way baseline B does, instead of from the loop.")
@@ -106,8 +101,6 @@ def build_agent(args):
                       max_iterations=args.max_iterations,
                       text_gate=args.text_gate,
                       final_pass=args.final_pass,
-                      legacy_prompt=args.legacy_prompt,
-                      direct_prompt=args.direct_prompt,
                       preview=args.preview, tool_set=args.tool_set,
                       text_limit=args.text_limit, max_names=args.max_names,
                       lookup_limit=args.lookup_limit)
@@ -210,8 +203,6 @@ def main():
 
         text_gate=args.text_gate,
         final_pass=args.final_pass,
-        legacy_prompt=args.legacy_prompt,
-        direct_prompt=args.direct_prompt,
 
         preview=args.preview,
         tool_set=args.tool_set,

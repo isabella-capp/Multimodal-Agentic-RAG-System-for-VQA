@@ -44,7 +44,7 @@ source "$CODE_DIR/scripts/lib/vllm.sh"
 ensure_vllm_venv
 serve_model "$MODEL" "$GPU_UTIL" "$MAX_LEN"
 
-BASE="--legacy-prompt --top-k 20 --rerank-top-n 20 --bm25-top-m 50
+BASE="--top-k 20 --rerank-top-n 20 --bm25-top-m 50
       --preview 8 --max-iterations 12 --final-pass
       --text-limit 5 --max-names 4 --lookup-limit 3
       --tool-set minimal --tools-strategy rrf

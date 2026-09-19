@@ -12,10 +12,6 @@ def parse_args():
     parser.add_argument("--base-url", default="http://localhost:8000/v1")
     parser.add_argument("--limit", type=int, default=None)
     parser.add_argument("--concurrency", type=int, default=8)
-    parser.add_argument("--direct-prompt", action="store_true",
-                        help="Long-form answers without the preamble, and full ranges.")
-    parser.add_argument("--legacy-prompt", action="store_true",
-                        help="Prompts without the answer-format block, as before it existed.")
     parser.add_argument(
         "--use-retrieval",
         action="store_true",

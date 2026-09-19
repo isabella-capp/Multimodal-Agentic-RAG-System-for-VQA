@@ -13,8 +13,7 @@ import paths
 from agent.messages import image_to_data_uri
 from agent.prompts import MULTI_NAMING_PROMPTS, NAMING_PROMPT
 from llm import VLMClient
-from prompts import (NO_RAG_PROMPT, NO_RAG_PROMPT_LEGACY, RAG_PROMPT,
-                     RAG_PROMPT_DIRECT, RAG_PROMPT_LEGACY, extract_answer)
+from prompts import NO_RAG_PROMPT, RAG_PROMPT, extract_answer
 from retrieval.bm25 import BM25Ranker
 from retrieval.knowledge_base import KnowledgeBase, load_df_cache
 from retrieval.fusion import rank_paragraphs
@@ -24,10 +23,8 @@ from vlm.arg_parser import parse_args
 from vlm.dataset import build_record
 
 
-def build_rag_prompt(question, paragraphs, legacy=False, direct=False):
-    template = (RAG_PROMPT_DIRECT if direct else
-                RAG_PROMPT_LEGACY if legacy else RAG_PROMPT)
-    return template.format(context="\n\n".join(paragraphs), question=question)
+def build_rag_prompt(question, paragraphs):
+    return RAG_PROMPT.format(context="\n\n".join(paragraphs), question=question)
 
 
 def setup_retrieval(top_k, retrieval_strategy, no_rerank):
@@ -216,7 +213,7 @@ def main():
     retrieval_attempts = itertools.count(1)
 
     def predict(item):
-        base = NO_RAG_PROMPT_LEGACY if args.legacy_prompt else NO_RAG_PROMPT
+        base = NO_RAG_PROMPT
         prompt = base.format(question=item["question"])
         paragraphs = retrieved = None
         if retriever is not None:
@@ -245,8 +242,7 @@ def main():
                     paragraphs, retrieved = context
                     if args.use_naming:
                         retrieved["predicted_name"] = name
-                    prompt = build_rag_prompt(item["question"], paragraphs,
-                                              args.legacy_prompt, args.direct_prompt)
+                    prompt = build_rag_prompt(item["question"], paragraphs)
             except Exception as e:
                 retrieval_errors.append(f"{item['unique_id']}: {e}")
                 tqdm.write(f"retrieval failed for {item['unique_id']}: {e}")
@@ -274,8 +270,8 @@ def main():
               naming_guesses=args.naming_guesses,
               use_text=args.use_text, text_limit=args.text_limit,
               text_gate=args.text_gate,
-              reranker=paths.CROSS_ENCODER_MODEL,
-              legacy_prompt=args.legacy_prompt, direct_prompt=args.direct_prompt)
+              reranker=paths.CROSS_ENCODER_MODEL)
+
     print(f"Done. Predictions saved to {args.output}")
 
 if __name__ == "__main__":

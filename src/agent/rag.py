@@ -13,8 +13,7 @@ from agent.messages import build_user_message
 from agent.prompts import PREVIEW_PROMPT, SYSTEM_PROMPT, UNIFIED_PROMPT
 from agent.run import AgentRun
 from agent.tools import build_tools
-from prompts import (RAG_PROMPT, RAG_PROMPT_DIRECT, RAG_PROMPT_LEGACY,
-                     extract_answer)
+from prompts import RAG_PROMPT, extract_answer
 from retrieval.bm25 import BM25Ranker
 from retrieval.fusion import Ranking, rank_paragraphs
 
@@ -50,8 +49,7 @@ class AgenticRAG:
                  ranking: Ranking = Ranking(), top_k=20, max_iterations=8,
                  text_limit: int = 5, max_names: int = 4, lookup_limit: int = 3,
                  text_gate: float | None = None,
-                 final_pass: bool = False, legacy_prompt: bool = False,
-                 direct_prompt: bool = False, preview: int = 0,
+                 final_pass: bool = False, preview: int = 0,
                  tool_set: str = "minimal"):
         self.llm = llm
         self.retriever = retriever
@@ -66,8 +64,6 @@ class AgenticRAG:
         self.lookup_limit = lookup_limit
         self.text_gate = text_gate
         self.final_pass = final_pass
-        self.legacy_prompt = legacy_prompt
-        self.direct_prompt = direct_prompt
         self.preview = preview
         self.tool_set = tool_set
 
@@ -142,8 +138,6 @@ class AgenticRAG:
                                rrf_k=self.ranking.rrf_k)
         if not best:
             return None
-        template = (RAG_PROMPT_DIRECT if self.direct_prompt else
-                    RAG_PROMPT_LEGACY if self.legacy_prompt else RAG_PROMPT)
-        prompt = template.format(context="\n\n".join(best), question=question)
+        prompt = RAG_PROMPT.format(context="\n\n".join(best), question=question)
         reply = self.llm.invoke([build_user_message(image_path, prompt)]).content
         return extract_answer(reply if isinstance(reply, str) else str(reply))
