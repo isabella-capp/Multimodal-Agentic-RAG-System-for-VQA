@@ -1,9 +1,3 @@
-"""Evaluate saved predictions with the Encyclopedic-VQA metric (Exact Match + BEM).
-
-Reads the JSONL produced by src/vlm/run_inference.py and reports overall and
-per-question-type accuracy.
-"""
-
 import os
 
 # Must be set before TensorFlow is imported (through evaluation_utils).
@@ -95,9 +89,6 @@ def main():
         json.dump(summary, f, indent=2)
     print(f"\nSummary written to {args.output}")
 
-    # One score per example, so a run can be given a confidence interval and two
-    # runs can be compared on the same examples. Without them a summary number
-    # cannot say whether a 0.5 point difference is a result or a coin flip.
     scores_path = args.output.replace(".json", ".scores.jsonl")
     with open(scores_path, "w", encoding="utf-8") as f:
         for row in per_example:
