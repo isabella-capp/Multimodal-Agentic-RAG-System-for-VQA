@@ -13,7 +13,7 @@ from agent.messages import build_user_message
 from agent.prompts import PREVIEW_PROMPT, SYSTEM_PROMPT, UNIFIED_PROMPT
 from agent.run import AgentRun
 from agent.tools import build_tools
-from prompts import RAG_PROMPT, extract_answer
+from prompts import RAG_PROMPT
 from retrieval.bm25 import BM25Ranker
 from retrieval.fusion import Ranking, rank_paragraphs
 
@@ -140,4 +140,4 @@ class AgenticRAG:
             return None
         prompt = RAG_PROMPT.format(context="\n\n".join(best), question=question)
         reply = self.llm.invoke([build_user_message(image_path, prompt)]).content
-        return extract_answer(reply if isinstance(reply, str) else str(reply))
+        return reply if isinstance(reply, str) else str(reply)

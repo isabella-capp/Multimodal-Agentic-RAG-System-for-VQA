@@ -22,6 +22,8 @@ TOP_K="${TOP_K:-20}"
 TOP_N="${TOP_N:-20}"
 CONCURRENCY="${CONCURRENCY:-8}"
 C_CONCURRENCY="${C_CONCURRENCY:-$CONCURRENCY}"
+FINAL_PASS="${FINAL_PASS:-1}"
+FP=(); [ "$FINAL_PASS" = "1" ] && FP=(--final-pass)
 
 RETRIEVAL_STRATEGY="${RETRIEVAL_STRATEGY:-rrf}"
 TOOLS_STRATEGY="${TOOLS_STRATEGY:-rrf}"
@@ -92,7 +94,7 @@ for S in $SETTINGS; do
         uv run python "$CODE_DIR"/src/agent/run_inference.py \
             --model-name "$MODEL" --base-url "$BASE_URL" \
             --output "$OUT_DIR/predictions_C.jsonl" \
-            --final-pass\
+            "${FP[@]}" \
             --preview "$PREVIEW" "${GATE[@]}" \
             --top-k "$TOP_K" --rerank-top-n "$TOP_N" \
             --tools-strategy "$TOOLS_STRATEGY" \

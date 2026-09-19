@@ -13,7 +13,7 @@ import paths
 from agent.messages import image_to_data_uri
 from agent.prompts import MULTI_NAMING_PROMPTS, NAMING_PROMPT
 from llm import VLMClient
-from prompts import NO_RAG_PROMPT, RAG_PROMPT, extract_answer
+from prompts import NO_RAG_PROMPT, RAG_PROMPT
 from retrieval.bm25 import BM25Ranker
 from retrieval.knowledge_base import KnowledgeBase, load_df_cache
 from retrieval.fusion import rank_paragraphs
@@ -254,8 +254,7 @@ def main():
                         f"that answers without retrieval scores like the no-retrieval "
                         f"baseline and looks plausible, so it is stopped here.")
 
-        prediction = extract_answer(
-            model.generate_response(item["image_path"], prompt))
+        prediction = model.generate_response(item["image_path"], prompt)
         if len(shown) < args.debug_samples:
             shown.append(item["unique_id"])
             print_debug_example(item, retrieved, paragraphs, prediction)
