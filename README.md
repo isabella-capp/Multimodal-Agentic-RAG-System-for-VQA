@@ -34,13 +34,16 @@ from ReAG; the knowledge base is built from the Encyclopedic-VQA release with
 
 ## Running an experiment
 
-Always submit through `scripts/submit.sh`. It snapshots the tree into `runs/<id>/`
-and points the job at that snapshot, so a queued job runs what you submitted and a
-past run can be reproduced from its own code rather than from `HEAD`:
+Each script under `scripts/` is a self-contained SLURM job and can be submitted
+with `sbatch` directly. We wrap them in `scripts/submit.sh`, which first copies
+the tree into `runs/<id>/` and points the job there, so that editing the code
+while a job sits in the queue cannot change what it runs. That matters when
+several variants are in flight at once; for a single run it is optional.
 
 ```bash
 scripts/submit.sh scripts/run_abc.sh                 # A, B and C on one server
 SMOKE=1 scripts/submit.sh scripts/run_abc.sh --time=00:40:00   # 5 examples first
+sbatch scripts/run_abc.sh                            # same job, no snapshot
 ```
 
 Every knob is an environment variable, so a variant is a submit line and not an

@@ -9,10 +9,14 @@ as measured, not as claims.
 
 ## How to run anything
 
-Submit through `scripts/submit.sh`. It snapshots the tree into `runs/<id>/` and
-points the job at that snapshot, so a past run reproduces from its own code, not
-from `HEAD`, and renaming a flag never breaks an old command line. Every
-`outputs/**/*.meta.json` records the exact command, the node and the GPU.
+Each script under `scripts/` is a SLURM job and runs under plain `sbatch`. The
+commands below use `scripts/submit.sh`, our wrapper, which copies the tree into
+`runs/<id>/` first so that a job already in the queue keeps running the code it
+was submitted with. It is a convenience, not a requirement.
+
+What matters for reading results is the other half: every
+`outputs/**/*.meta.json` records the exact command, every knob, the node and the
+GPU that produced the file beside it. The timings in the paper come from there.
 
 Paired tests come from the per-example scores written beside every result:
 
