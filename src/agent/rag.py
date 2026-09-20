@@ -50,7 +50,7 @@ class AgenticRAG:
                  text_limit: int = 5, max_names: int = 4, lookup_limit: int = 3,
                  text_gate: float | None = None,
                  final_pass: bool = False, preview: int = 0,
-                 tool_set: str = "minimal"):
+                 tool_set: str = "two"):
         self.llm = llm
         self.retriever = retriever
         self.kb = kb
@@ -71,7 +71,7 @@ class AgenticRAG:
         """The one middleware left, and the only one that ever earned its place."""
         if self.text_gate is None:
             return []
-        # the gate forces by name, so the name must exist in the installed set
+        
         second = "search_paragraphs" if self.tool_set == "four" else "search"
         return [open_text_gate(state, second, self.text_gate)]
 
@@ -95,7 +95,6 @@ class AgenticRAG:
                               lookup_limit=self.lookup_limit,
                               state=state, tool_set=self.tool_set,
                               preview=self.preview, question=question),
-            # the prompt must name the tools that are actually installed
             system_prompt=(SYSTEM_PROMPT if self.tool_set == "four" else
                            PREVIEW_PROMPT if self.preview else UNIFIED_PROMPT),
             middleware=self._middleware(question, state),

@@ -74,8 +74,7 @@ def parse_args():
         "--naming-guesses",
         type=int,
         default=1,
-        help="Names to ask the model for. One resolves to the right article "
-             "11.8%% of the time, three 17.1%%; the curve is flat past five.",
+        help="Names to ask the model for; the extra ones are looked up too.",
     )
     parser.add_argument(
         "--use-text",
@@ -94,9 +93,7 @@ def parse_args():
         type=float,
         default=None,
         help="Only search the KB by text when the best paragraph of the image pool "
-             "scores below this (cross-encoder logit). Below -1 the pool holds the "
-             "gold article 4-40%% of the time and the text channel supplies it; "
-             "above, it holds it 46-62%% and the channel only adds noise.",
+             "scores below this (cross-encoder logit). Off by default.",
     )
     parser.add_argument(
         "--debug-samples",

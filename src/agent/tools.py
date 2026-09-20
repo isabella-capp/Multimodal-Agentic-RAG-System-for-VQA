@@ -45,7 +45,7 @@ def build_tools(retriever, kb, reranker, bm25, image,
                 ranking: Ranking = Ranking(),
                 top_k=20, lookup_limit=3,
                 text_limit: int = 5, state=None,
-                max_names: int = 4, tool_set: str = "minimal",
+                max_names: int = 4, tool_set: str = "two",
                 preview: int = 0, question: str = ""):
     """Retrieval tools for one query image, over a working set the agent grows."""
     candidates: dict[str, Candidate] = {}   # keyed by wiki_url

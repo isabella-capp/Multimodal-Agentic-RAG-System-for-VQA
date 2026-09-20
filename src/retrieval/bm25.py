@@ -13,7 +13,7 @@ def _tokenize(text: str) -> list[str]:
 
 
 class BM25Ranker:
-    """DEPRECATED. Lexical candidate filter using BM25Okapi (rank_bm25)."""
+    """Lexical ranking over an in-memory paragraph pool; one of the two lists RRF fuses."""
 
     def rank(
         self,

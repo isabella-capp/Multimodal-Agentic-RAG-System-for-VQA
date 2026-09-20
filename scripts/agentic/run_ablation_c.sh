@@ -47,7 +47,7 @@ serve_model "$MODEL" "$GPU_UTIL" "$MAX_LEN"
 BASE="--top-k 20 --rerank-top-n 20 --bm25-top-m 50
       --preview 8 --text-gate -1 --max-iterations 12
       --text-limit 5 --max-names 4 --lookup-limit 3
-      --tool-set minimal --tools-strategy rrf
+      --tool-set two --tools-strategy rrf
       --preview-strategy bge --final-strategy bge"   # the pre-sweep default
 
 CONFIGS="
