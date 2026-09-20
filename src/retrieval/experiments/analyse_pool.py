@@ -55,24 +55,22 @@ def main():
 
     n = stats["examples"] or 1
     pct = {k: round(100 * v / n, 1) for k, v in stats.items() if k != "examples"}
-    print("=" * 62)
     print(f"{args.predictions}   ({stats['examples']} examples)")
     print(f"  right article in the pool via IMAGE   : {pct['image']:5.1f}%")
     print(f"  right article in the pool via NAME    : {pct['name']:5.1f}%")
     print(f"  right article in the pool via TEXT    : {pct['text']:5.1f}%")
-    print(f"  UNION                                 : {pct['union']:5.1f}%   <- what the model sees")
+    print(f"  UNION                                 : {pct['union']:5.1f}%")
     print(f"    only the image found it             : {pct['image_only']:5.1f}%")
     print(f"    only the name found it              : {pct['name_only']:5.1f}%")
     print(f"    only the text found it              : {pct['text_only']:5.1f}%")
     print(f"    neither                             : {pct['neither']:5.1f}%")
     print(f"  a name was produced                   : {pct['named']:5.1f}%")
     print(f"  that name resolved to some article    : {pct['name_resolved_to_something']:5.1f}%")
-    print("=" * 62)
 
     if args.output:
         with open(args.output, "w", encoding="utf-8") as f:
             json.dump({"counts": stats, "percent": pct}, f, indent=2)
-        print(f"Saved: {args.output}")
+        print(f"Saved to {args.output}")
 
 
 if __name__ == "__main__":

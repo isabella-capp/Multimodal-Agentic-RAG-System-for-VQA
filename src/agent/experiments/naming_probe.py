@@ -74,7 +74,8 @@ def name_one(llm, path, variant, boxes, upscale, guesses=1, style="diverse"):
                                    "image_url": {"url": data_uri(img)}}]),
         ])
         return resp.content if isinstance(resp.content, str) else str(resp.content)
-    except Exception:
+    except Exception as e:
+        tqdm.write(f"naming failed for {path}: {e}")
         return None
 
 
@@ -164,13 +165,10 @@ def main():
             results[variant] = (hit, exact, attempted, len(dataset))
 
     n = len(dataset)
-    print("=" * 66)
     print(f"model: {args.model_name}   examples: {n}   upscale: {args.upscale}")
     print(f"{'variant':12s} {'name -> right article':>22s} {'exact title':>13s} {'answered':>10s}")
     for v, (hit, exact, attempted, tot) in results.items():
         print(f"{v:12s} {100 * hit / tot:21.1f}% {100 * exact / tot:12.1f}% {100 * attempted / tot:9.1f}%")
-    print("\nreference: image index recall@20 = 40.6%, name-lookup ceiling = 84.2%")
-    print("=" * 66)
     print(f"Per-example detail: {args.output}")
 
 

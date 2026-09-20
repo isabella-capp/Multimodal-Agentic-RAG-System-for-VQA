@@ -164,7 +164,6 @@ def main():
 
     os.makedirs(args.output_dir, exist_ok=True)
 
-    print(f"\n{'='*70}")
     print("Loading validation dataset …")
     dataset = load_dataset(args.val_json, args.base_folder)
     if args.limit is not None:
@@ -177,11 +176,9 @@ def main():
     for qt in sorted(qtypes):
         print(f"  {qt:20s}: {qtypes[qt]}")
 
-    print(f"\n{'='*70}")
     print("Loading Qwen VLM …")
     model = VLMClient(model_name=args.model_name, base_url=args.base_url)
 
-    print(f"\n{'='*70}")
     print("Loading EVA-CLIP retriever …")
     max_top_k = max(args.top_k_values)
     retriever = Retriever(
@@ -193,22 +190,18 @@ def main():
     retriever._ensure_index()
     retriever._ensure_model()
 
-    print(f"\n{'='*70}")
     print("Loading Knowledge Base …")
     kb = KnowledgeBase(args.kb_path)
 
-    print(f"\n{'='*70}")
     print("Loading Cross-Encoder reranker …")
     reranker = CrossEncoderReranker(
         args.cross_encoder_model, device=args.retriever_device
     )
 
     grid = list(itertools.product(args.top_k_values, args.rerank_top_n_values))
-    print(f"\n{'='*70}")
     print(f"Ablation grid: {len(grid)} configurations")
     for top_k, rerank_n in grid:
         print(f"  top_k={top_k:2d}  rerank_top_n={rerank_n}")
-    print("=" * 70)
 
     all_results = {}
 
@@ -217,17 +210,16 @@ def main():
         pred_path = os.path.join(args.output_dir, f"predictions_{config_name}.jsonl")
         result_path = os.path.join(args.output_dir, f"results_{config_name}.json")
 
-        print(f"\n{'─'*70}")
-        print(f"[{i}/{len(grid)}] Config: {config_name}")
+        print(f"\n[{i}/{len(grid)}] {config_name}")
 
         if os.path.exists(result_path):
-            print(f"  [skip] already done → {result_path}")
+            print("  already scored, skipping")
             with open(result_path, encoding="utf-8") as f:
                 all_results[config_name] = json.load(f)
             continue
 
         if os.path.exists(pred_path):
-            print(f"  [redo] discarding partial {os.path.basename(pred_path)}")
+            print(f"  discarding partial {os.path.basename(pred_path)}")
             os.remove(pred_path)
 
         print(f"  top_k={top_k}, rerank_top_n={rerank_n}")
@@ -261,17 +253,11 @@ def main():
         print(f"  Proxy accuracy: {scores['accuracy_overall']:.4f}")
         for qt in sorted(scores["accuracy_by_type"]):
             print(f"    {qt:20s}: {scores['accuracy_by_type'][qt]:.4f}")
-        print(f"  Predictions → {pred_path}")
-        print(f"  Results     → {result_path}")
 
-    print(f"\n{'='*70}")
-    print("ABLATION STUDY COMPLETE")
-    print(f"{'='*70}\n")
 
     ranking = sorted(all_results.items(), key=lambda x: x[1]["accuracy_overall"], reverse=True)
 
-    print(f"{'Config':<30s} {'Accuracy':>10s} {'Time (s)':>10s}")
-    print("─" * 52)
+    print(f"\n{'Config':<30s} {'Accuracy':>10s} {'Time (s)':>10s}")
     for name, res in ranking:
         cfg = res["config"]
         print(
@@ -282,7 +268,7 @@ def main():
 
     best_name, best_res = ranking[0]
     best_cfg = best_res["config"]
-    print(f"\n★ Best config: top_k={best_cfg['top_k']}, rerank_top_n={best_cfg['rerank_top_n']}")
+    print(f"\nBest config: top_k={best_cfg['top_k']}, rerank_top_n={best_cfg['rerank_top_n']}")
     print(f"  Proxy accuracy: {best_res['accuracy_overall']:.4f}")
 
     summary_path = os.path.join(args.output_dir, "ablation_summary.json")
@@ -294,16 +280,10 @@ def main():
     }
     with open(summary_path, "w", encoding="utf-8") as f:
         json.dump(summary, f, indent=2, ensure_ascii=False)
-    print(f"\nAggregated summary → {summary_path}")
+    print(f"\nSummary written to {summary_path}")
 
-    print(f"\n{'='*70}")
-    print("NOTE: The proxy scores above use simple exact-match heuristics.")
-    print("For official BEM scores, run the evaluation script on each predictions file:")
-    print(f"  for f in {args.output_dir}/predictions_cross_*.jsonl; do")
-    print('    uv run python evqa_eval/score_evqa.py --predictions "$f" \\')
-    print('      --output "${f/predictions_/results_BEM_}"')
-    print("  done")
-    print(f"{'='*70}")
+    print("Accuracies above are exact-match proxies; score the predictions "
+          "files with evqa_eval/score_evqa.py for BEM.")
 
 if __name__ == "__main__":
     main()

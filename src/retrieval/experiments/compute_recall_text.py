@@ -63,7 +63,6 @@ def main():
                                   "image_hit": in_img, "titles": found[:5]}) + "\n")
 
     n = tot or 1
-    print("=" * 66)
     print(f"text channel (question -> BM25 over 14.1M paragraphs), n={tot}")
     for k in KS:
         print(f"  recall@{k:<3}: {100 * hits[k] / n:5.1f}%")
@@ -71,9 +70,8 @@ def main():
     print(f"  image                 : {100 * img_hit / n:5.1f}%")
     print(f"  UNION                 : {100 * union / n:5.1f}%")
     print(f"    only the image      : {100 * image_only / n:5.1f}%")
-    print(f"    only the text       : {100 * text_only / n:5.1f}%   <- what this channel adds")
+    print(f"    only the text       : {100 * text_only / n:5.1f}%")
     print(f"    neither             : {100 * neither / n:5.1f}%")
-    print("=" * 66)
     print(f"Per-example detail: {args.output}")
 
 

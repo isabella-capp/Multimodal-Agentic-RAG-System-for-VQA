@@ -60,7 +60,7 @@ def main():
 
         top_k, rerank_n = extract_config(os.path.basename(filepath))
         if top_k is None:
-            print(f"  [skip] Cannot parse config from {filepath}")
+            print(f"  cannot parse config from {filepath}")
             continue
 
         entry = {
@@ -80,7 +80,7 @@ def main():
     header_qtypes = "".join(f"{qt[:12]:>14s}" for qt in qtypes_sorted)
     header = f"{'Rank':>4s}  {'top_k':>5s}  {'rerank_n':>8s}  {'Overall':>8s}{header_qtypes}"
     print(header)
-    print("─" * len(header))
+    print("-" * len(header))
 
     for rank, entry in enumerate(results, 1):
         qtypes_str = "".join(
@@ -92,7 +92,7 @@ def main():
         )
 
     best = results[0]
-    print("\n★ Best configuration:")
+    print("\nBest configuration:")
     print(f"  top_k={best['top_k']}, rerank_top_n={best['rerank_top_n']}")
     print(f"  Overall accuracy: {best['accuracy_overall']:.4f}")
     for qt in qtypes_sorted:
@@ -111,7 +111,7 @@ def main():
     for rn in rerank_n_values:
         print(f"  {rn:>8d}", end="")
     print()
-    print("─" * (18 + 10 * len(rerank_n_values)))
+    print("-" * (18 + 10 * len(rerank_n_values)))
     for tk in top_k_values:
         print(f"{tk:>18d}", end="")
         for rn in rerank_n_values:
@@ -119,7 +119,7 @@ def main():
             if val is not None:
                 print(f"  {val:>8.4f}", end="")
             else:
-                print(f"  {'—':>8s}", end="")
+                print(f"  {'-':>8s}", end="")
         print()
 
     summary = {
